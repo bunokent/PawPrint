@@ -157,3 +157,50 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `AGENTS.md` points to it and the `taste` skill (`.agents/skills/design-taste-frontend`).
   `docs/DOCUMENTATION.md` (these 12 sections) + root `package.json` with
   `docs:pdf` (md-to-pdf) → `docs/documentation.pdf` generated and committed.
+- **Phase 1** — Backend foundation in `backend/`: `pyproject.toml` (Django 5.2 LTS, DRF,
+  drf-spectacular, psycopg, redis, celery, channels(+redis), django-allauth[socialaccount],
+  django-cors-headers, django-storages[s3], Pillow, qrcode, stripe, httpx, ultralytics,
+  weasyprint + pytest/factory-boy/responses/ruff/mypy dev deps). `django.contrib.admin`
+  fully removed. `docker-compose.yml` (postgres:16, redis:7, minio, mailpit, celery, web) +
+  `.env.example`. Models with constraints/indexes: `users.User` (UUID PK, email login,
+  google_id, stripe_customer_id), `pets.Pet` (SearchVector GIN, JSON GIN, composite
+  `(status, created_at)`), `flyers.Flyer` (CheckConstraint reward>0, `(mode,status,created_at)`,
+  `(creator,mode)`), `rewards.RewardTransaction` (unique provider_reference, select_for_update
+  in service), `webhooks.WebhookEvent` (unique `(provider, event_id)`), `vision.PetDetectionLog`.
+  factory-boy factories + `seed_demo` command. Tests: `test_health.py` (incl. admin-absent
+  assertion, 0-query health) + `test_factories.py`. Local PG on :5433 used for tests;
+  pytest switches to locmem cache / in-memory channels / eager Celery / filesystem storage.
+- **Phase 2** — Auth: `POST /api/auth/register|login|logout`, `GET /api/auth/me` (401 +
+  `session_expired` for guests via custom `SessionAuthenticationWith401`),
+  `GET|POST /api/auth/google/url|callback` — Google/Gmail OAuth 2.0 via django-allauth
+  SocialAccount with one-click Gmail registration, email-account linking, and existing
+  sign-in. `auth_write` scope throttle 20/min (verified 429 on the 21st request).
+  14 auth integration tests.
+- **Phase 3** — Flyer core: cursor-paginated public `GET /api/flyers` (Guest allowed,
+  `select_related('pet','creator')` + `only()`, SearchVector FTS `?q=`, `?mode=` filter,
+  `django_assert_max_num_queries` ceilings), public `GET /api/flyers/{id}` (QR landing),
+  creator-only `POST /api/flyers/new`, `PATCH/DELETE /api/flyers/{id}/edit`
+  (`IsOwnerOrReadOnly`), `GET /api/flyers/mine`. `FlyerService` dispatches Celery
+  `generate_flyer_assets` (queue `flyers`) → WeasyPrint A4 PDF + Playwright A4@300dpi PNG →
+  private S3 → `flyer.generated` broadcast over Channels (`ws/flyers/`). A4 templates
+  `templates/flyers/{emergency,outreach}.html` with dual palettes.
+- **Phase 3.5** — YOLOv8 gatekeeper: `PetDetectionService` singleton `YOLO("yolov8n.pt")`,
+  COCO pet classes {14,15,16,17,18,19} @ conf ≥ 0.45 (configurable). Pass → EXIF stripped
+  (Pillow) → private S3 → thumbnail task (queue `images`) → signed URL + detected labels.
+  Fail → bytes discarded pre-S3, `PetDetectionLog(passed=False)`, HTTP 422
+  `no_pet_detected` with detected labels; zero strikes/bans. `POST /api/pets/photos`
+  (auth, `upload` throttle 10/min — 429 on 11th). ultralytics 8.4.215 + torch 2.15 CPU
+  installed in the venv.
+- **Phase 4** — Rewards: `PaymentDriver` protocol + `StripeDriver` (Checkout Session, test
+  mode) + `PayMongoDriver` (httpx Basic auth; GCash checkout session + QR Ph payment intent;
+  injectable client for MockTransport tests). `RewardService.create_reward` creates a
+  pending `RewardTransaction` atomically then delegates to the driver.
+  `POST /api/rewards`, `GET /api/rewards/{id}/status` (payer/creator only),
+  `GET /api/rewards/mine`. Webhooks `POST /api/webhooks/stripe|paymongo` — CSRF-exempt,
+  signature-verified (Stripe `Stripe-Signature`, PayMongo HMAC-SHA256 `te=`),
+  deduped via `WebhookEvent(provider, event_id)`, 200 in <50 ms, processing on the
+  `webhooks` queue with `select_for_update`.
+
+**Backend status after Phase 4:** `pytest -n auto --cov=apps --cov-fail-under=80` →
+79 passed, **94.5% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`);
+`ruff check apps config tests` clean; `mypy apps` clean (87 files).

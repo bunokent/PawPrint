@@ -1,0 +1,62 @@
+"""Flyer model — one per pet, dual-mode (emergency | outreach)."""
+
+import uuid
+
+from django.db import models
+from django.db.models import CheckConstraint, Index, Q, UniqueConstraint
+
+
+class Flyer(models.Model):
+    class Mode(models.TextChoices):
+        EMERGENCY = "emergency", "Emergency (lost pet)"
+        OUTREACH = "outreach", "Outreach (adoption)"
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        GENERATING = "generating", "Generating assets"
+        ACTIVE = "active", "Active"
+        RESOLVED = "resolved", "Resolved"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    pet = models.ForeignKey("pets.Pet", on_delete=models.CASCADE, related_name="flyers")
+    creator = models.ForeignKey("users.User", on_delete=models.CASCADE, related_name="flyers")
+    mode = models.CharField(max_length=16, choices=Mode.choices, default=Mode.EMERGENCY)
+    last_seen_location = models.CharField(max_length=255, blank=True)
+    last_seen_date = models.DateTimeField(null=True, blank=True)
+    distinctive_markings = models.TextField(blank=True)
+    contact_phone = models.CharField(max_length=32, blank=True)
+    contact_email = models.EmailField(blank=True)
+    reward_enabled = models.BooleanField(default=False)
+    reward_amount_cents = models.PositiveIntegerField(default=0)
+    reward_currency = models.CharField(max_length=8, default="PHP")
+    # What the QR code points at (usually the public flyer URL).
+    qr_target_type = models.CharField(max_length=32, default="flyer_url")
+    qr_target_value = models.URLField(max_length=512, blank=True)
+    export_png_path = models.CharField(max_length=512, blank=True)
+    export_pdf_path = models.CharField(max_length=512, blank=True)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.DRAFT)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "flyers_flyer"
+        constraints = [
+            # Reward amount must be positive when rewards are enabled.
+            CheckConstraint(
+                condition=Q(reward_enabled=False) | Q(reward_amount_cents__gt=0),
+                name="flyer_reward_amount_positive",
+            ),
+            # One active flyer per pet at a time is a product rule enforced in services;
+            # here we keep the DB honest about unique QR targets per flyer row.
+            UniqueConstraint(fields=["id"], name="flyer_unique_id"),
+        ]
+        indexes = [
+            # Public gallery: filter by mode + status, order by recency.
+            Index(fields=["mode", "status", "created_at"], name="flyer_mode_status_created_idx"),
+            # "My flyers" dashboard.
+            Index(fields=["creator", "mode"], name="flyer_creator_mode_idx"),
+            Index(fields=["status", "created_at"], name="flyer_status_created_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.mode} flyer for {self.pet_id}"

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ADOPTION — {{ flyer.pet.name }}</title>
+<style>
+  /* A4 @300dpi print fidelity: 210mm x 297mm — warm outreach palette (sage/teal/terracotta) */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 210mm; height: 297mm; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    background: #f6f1e7; color: #26332b;
+    display: flex; flex-direction: column;
+  }
+  .band {
+    background: #2f6f5e; color: #f6f1e7;
+    padding: 10mm 14mm; display: flex; justify-content: space-between; align-items: center;
+  }
+  .band h1 { font-size: 32pt; font-weight: 800; letter-spacing: 0.04em; }
+  .band .sub { font-size: 12pt; opacity: 0.92; }
+  .tag {
+    background: #c96f4a; color: #fff; font-weight: 700; font-size: 12pt;
+    padding: 3mm 7mm; border-radius: 20mm;
+  }
+  .photo { padding: 10mm 14mm 4mm; text-align: center; }
+  .photo img { width: 118mm; height: 118mm; object-fit: cover; border-radius: 60mm; border: 2.5mm solid #2f6f5e; }
+  .name { text-align: center; font-size: 30pt; font-weight: 800; padding: 3mm 0 1mm; }
+  .meta { text-align: center; font-size: 13pt; color: #5c6b60; padding-bottom: 6mm; }
+  .chips { display: flex; justify-content: center; gap: 3mm; padding-bottom: 6mm; flex-wrap: wrap; }
+  .chip { background: #e3dcc8; color: #26332b; border-radius: 20mm; padding: 1.5mm 5mm; font-size: 11pt; font-weight: 600; }
+  .card {
+    margin: 0 14mm; border: 1.5pt solid #2f6f5e; border-radius: 3mm; padding: 6mm 8mm; background: #fffdf8;
+  }
+  .card h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.08em; color: #2f6f5e; margin-bottom: 2mm; }
+  .card p { font-size: 12.5pt; line-height: 1.5; }
+  .footer { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; padding: 8mm 14mm 12mm; }
+  .qr { width: 34mm; height: 34mm; }
+  .contact { text-align: right; }
+  .contact h2 { font-size: 13pt; color: #c96f4a; font-weight: 800; }
+  .contact p { font-size: 13pt; line-height: 1.5; }
+  .strip { background: #26332b; color: #f6f1e7; font-size: 9.5pt; text-align: center; padding: 3mm; }
+</style>
+</head>
+<body>
+  <div class="band">
+    <div>
+      <h1>ADOPTABLE</h1>
+      <div class="sub">Meet {{ flyer.pet.name }} — looking for a forever home</div>
+    </div>
+    <div class="tag">ADOPT ME</div>
+  </div>
+  <div class="photo">
+    {% if flyer.pet.photo_path %}<img src="{{ photo_url }}" alt="{{ flyer.pet.name }}">{% endif %}
+  </div>
+  <div class="name">{{ flyer.pet.name|upper }}</div>
+  <div class="meta">{{ flyer.pet.get_species_display }} · {{ flyer.pet.breed }} · {{ flyer.pet.color }}{% if flyer.pet.age %} · {{ flyer.pet.age }} yrs{% endif %}</div>
+  <div class="chips">
+    {% for tag in flyer.pet.temperament_tags %}<span class="chip">{{ tag }}</span>{% endfor %}
+    {% for tag in flyer.pet.health_tags %}<span class="chip">{{ tag }}</span>{% endfor %}
+  </div>
+  <div class="card">
+    <h2>About {{ flyer.pet.name }}</h2>
+    <p>{{ flyer.distinctive_markings|default:"A wonderful companion looking for a loving home." }}</p>
+  </div>
+  <div class="footer">
+    <div class="qr">{{ qr_svg|safe }}</div>
+    <div class="contact">
+      <h2>WANT TO MEET {{ flyer.pet.name|upper }}?</h2>
+      <p>{{ flyer.contact_phone }}<br>{{ flyer.contact_email }}</p>
+    </div>
+  </div>
+  <div class="strip">PawPrint · Scan the QR code to see the full adoption profile · pawprint.example</div>
+</body>
+</html>

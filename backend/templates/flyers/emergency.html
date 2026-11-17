@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>LOST PET — {{ flyer.pet.name }}</title>
+<style>
+  /* A4 @300dpi print fidelity: 210mm x 297mm */
+  @page { size: A4; margin: 0; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 210mm; height: 297mm; }
+  body {
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    background: #fffdf8; color: #1c1410;
+    display: flex; flex-direction: column;
+  }
+  .band {
+    background: #b3261e; color: #ffffff;
+    padding: 10mm 14mm; display: flex; justify-content: space-between; align-items: center;
+  }
+  .band h1 { font-size: 34pt; letter-spacing: 0.06em; font-weight: 800; }
+  .band .sub { font-size: 12pt; font-weight: 600; opacity: 0.92; }
+  .reward {
+    background: #ffb300; color: #2b1a00; font-weight: 800; font-size: 15pt;
+    padding: 4mm 8mm; border-radius: 3mm; text-align: center;
+  }
+  .photo { padding: 10mm 14mm 4mm; text-align: center; }
+  .photo img { width: 120mm; height: 120mm; object-fit: cover; border-radius: 4mm; border: 2mm solid #b3261e; }
+  .name { text-align: center; font-size: 30pt; font-weight: 800; padding: 2mm 0 1mm; }
+  .meta { text-align: center; font-size: 13pt; color: #4a3f38; padding-bottom: 6mm; }
+  .grid { display: flex; gap: 8mm; padding: 0 14mm; }
+  .card { flex: 1; border: 1.5pt solid #b3261e; border-radius: 3mm; padding: 6mm 8mm; }
+  .card h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.08em; color: #b3261e; margin-bottom: 2mm; }
+  .card p { font-size: 12.5pt; line-height: 1.5; }
+  .footer {
+    margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 8mm 14mm 12mm;
+  }
+  .qr { width: 34mm; height: 34mm; }
+  .contact { text-align: right; }
+  .contact h2 { font-size: 13pt; color: #b3261e; font-weight: 800; }
+  .contact p { font-size: 13pt; line-height: 1.5; }
+  .strip { background: #1c1410; color: #fffdf8; font-size: 9.5pt; text-align: center; padding: 3mm; }
+</style>
+</head>
+<body>
+  <div class="band">
+    <div>
+      <h1>LOST PET</h1>
+      <div class="sub">Please help {{ flyer.pet.name }} come home</div>
+    </div>
+    {% if flyer.reward_enabled and flyer.reward_amount_cents %}
+    <div class="reward">REWARD<br>{{ flyer.reward_amount_cents }} {{ flyer.reward_currency }}</div>
+    {% endif %}
+  </div>
+  <div class="photo">
+    {% if flyer.pet.photo_path %}<img src="{{ photo_url }}" alt="{{ flyer.pet.name }}">{% endif %}
+  </div>
+  <div class="name">{{ flyer.pet.name|upper }}</div>
+  <div class="meta">{{ flyer.pet.get_species_display }} · {{ flyer.pet.breed }} · {{ flyer.pet.color }}{% if flyer.pet.age %} · {{ flyer.pet.age }} yrs{% endif %}</div>
+  <div class="grid">
+    <div class="card">
+      <h2>Last seen</h2>
+      <p>{{ flyer.last_seen_location|default:"—" }}<br>{{ flyer.last_seen_date|date:"M d, Y H:i"|default:"" }}</p>
+    </div>
+    <div class="card">
+      <h2>Distinctive markings</h2>
+      <p>{{ flyer.distinctive_markings|default:"—" }}</p>
+    </div>
+  </div>
+  <div class="footer">
+    <div class="qr">{{ qr_svg|safe }}</div>
+    <div class="contact">
+      <h2>SEEN {{ flyer.pet.name|upper }}? CALL NOW</h2>
+      <p>{{ flyer.contact_phone }}<br>{{ flyer.contact_email }}</p>
+    </div>
+  </div>
+  <div class="strip">PawPrint · Scan the QR code for the live alert · pawprint.example</div>
+</body>
+</html>

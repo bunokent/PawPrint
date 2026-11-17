@@ -1,0 +1,739 @@
+openapi: 3.0.3
+info:
+  title: PawPrint API
+  version: 0.1.0
+  description: Dual-mode lost-pet alert + adoption flyer generator
+paths:
+  /api/auth/google/callback:
+    post:
+      operationId: auth_google_callback_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/auth/google/url:
+    post:
+      operationId: auth_google_url_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/auth/login:
+    post:
+      operationId: auth_login_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/auth/logout:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      responses:
+        '200':
+          description: No response body
+  /api/auth/me:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      responses:
+        '200':
+          description: No response body
+  /api/auth/register:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/flyers:
+    get:
+      operationId: flyers_list
+      description: Public gallery — Guest Mode allowed. Cursor-paginated, FTS + mode
+        filter.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - flyers
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFlyerList'
+          description: ''
+  /api/flyers/{id}:
+    get:
+      operationId: flyers_retrieve
+      description: Public flyer detail — Guest Mode allowed (QR scanners land here).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/flyers/{id}/edit:
+    patch:
+      operationId: flyers_edit_partial_update
+      description: PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: flyers_edit_destroy
+      description: PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      responses:
+        '204':
+          description: No response body
+  /api/flyers/mine:
+    get:
+      operationId: flyers_mine_list
+      description: Authenticated user's own flyers (active + resolved).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - flyers
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFlyerList'
+          description: ''
+  /api/flyers/new:
+    post:
+      operationId: flyers_new_create
+      tags:
+      - flyers
+      responses:
+        '200':
+          description: No response body
+  /api/health:
+    get:
+      operationId: health_retrieve
+      description: Liveness probe — public.
+      tags:
+      - health
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/pets:
+    post:
+      operationId: pets_create
+      tags:
+      - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+          description: ''
+  /api/pets/photos:
+    post:
+      operationId: pets_photos_create
+      description: POST /api/pets/photos — YOLOv8-gated pet photo upload (10/min).
+      tags:
+      - pets
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoUploadResponse'
+          description: ''
+  /api/rewards:
+    post:
+      operationId: rewards_create
+      tags:
+      - rewards
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardInit'
+          description: ''
+  /api/rewards/{id}/status:
+    get:
+      operationId: rewards_status_retrieve
+      description: Poll payment status — payer or flyer creator only.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rewards
+      responses:
+        '200':
+          description: No response body
+  /api/rewards/mine:
+    get:
+      operationId: rewards_mine_retrieve
+      tags:
+      - rewards
+      responses:
+        '200':
+          description: No response body
+components:
+  schemas:
+    Flyer:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        mode:
+          $ref: '#/components/schemas/ModeEnum'
+        status:
+          allOf:
+          - $ref: '#/components/schemas/FlyerStatusEnum'
+          readOnly: true
+        pet:
+          allOf:
+          - $ref: '#/components/schemas/Pet'
+          readOnly: true
+        creator:
+          type: string
+          format: uuid
+          readOnly: true
+        creator_display_name:
+          type: string
+          readOnly: true
+        last_seen_location:
+          type: string
+          maxLength: 255
+        last_seen_date:
+          type: string
+          format: date-time
+          nullable: true
+        distinctive_markings:
+          type: string
+        contact_phone:
+          type: string
+          maxLength: 32
+        contact_email:
+          oneOf:
+          - type: string
+            format: email
+            maxLength: 254
+          - type: string
+            maxLength: 0
+        reward_enabled:
+          type: boolean
+        reward_amount_cents:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        reward_currency:
+          type: string
+          maxLength: 8
+        qr_target_type:
+          type: string
+          maxLength: 32
+        qr_target_value:
+          oneOf:
+          - type: string
+            format: uri
+            maxLength: 512
+          - type: string
+            maxLength: 0
+        photo_url:
+          type: string
+          readOnly: true
+        export_png_url:
+          type: string
+          readOnly: true
+        export_pdf_url:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - creator
+      - creator_display_name
+      - export_pdf_url
+      - export_png_url
+      - id
+      - pet
+      - photo_url
+      - status
+      - updated_at
+    FlyerStatusEnum:
+      enum:
+      - draft
+      - generating
+      - active
+      - resolved
+      type: string
+      description: |-
+        * `draft` - Draft
+        * `generating` - Generating assets
+        * `active` - Active
+        * `resolved` - Resolved
+    GoogleCallback:
+      type: object
+      properties:
+        code:
+          type: string
+        redirect_uri:
+          type: string
+      required:
+      - code
+      - redirect_uri
+    GoogleUrl:
+      type: object
+      properties:
+        redirect_uri:
+          type: string
+      required:
+      - redirect_uri
+    Login:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+      required:
+      - email
+      - password
+    ModeEnum:
+      enum:
+      - emergency
+      - outreach
+      type: string
+      description: |-
+        * `emergency` - Emergency (lost pet)
+        * `outreach` - Outreach (adoption)
+    PaginatedFlyerList:
+      type: object
+      required:
+      - results
+      properties:
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cD00ODY%3D"
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?cursor=cj0xJnA9NDg3
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Flyer'
+    Pet:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        name:
+          type: string
+          maxLength: 120
+        species:
+          $ref: '#/components/schemas/SpeciesEnum'
+        breed:
+          type: string
+          maxLength: 120
+        color:
+          type: string
+          maxLength: 120
+        age:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        temperament_tags: {}
+        health_tags: {}
+        photo_path:
+          type: string
+          maxLength: 512
+        photo_url:
+          type: string
+          readOnly: true
+        status:
+          $ref: '#/components/schemas/StatusE57Enum'
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+      - photo_url
+    PetCreate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 120
+        species:
+          allOf:
+          - $ref: '#/components/schemas/SpeciesEnum'
+          default: dog
+        breed:
+          type: string
+          maxLength: 120
+        color:
+          type: string
+          maxLength: 120
+        age:
+          type: integer
+          maximum: 50
+          minimum: 0
+          nullable: true
+        temperament_tags:
+          type: array
+          items:
+            type: string
+            maxLength: 40
+        health_tags:
+          type: array
+          items:
+            type: string
+            maxLength: 40
+        photo_path:
+          type: string
+          maxLength: 512
+        status:
+          allOf:
+          - $ref: '#/components/schemas/StatusE57Enum'
+          default: adoptable
+      required:
+      - name
+    PhotoUploadResponse:
+      type: object
+      properties:
+        key:
+          type: string
+        url:
+          type: string
+        thumb_key:
+          type: string
+        thumb_url:
+          type: string
+        pet_classes:
+          type: array
+          items:
+            type: string
+        detected_classes:
+          type: array
+          items:
+            type: string
+        max_confidence:
+          type: number
+          format: double
+      required:
+      - detected_classes
+      - key
+      - max_confidence
+      - pet_classes
+      - thumb_key
+      - thumb_url
+      - url
+    ProviderEnum:
+      enum:
+      - stripe
+      - gcash
+      type: string
+      description: |-
+        * `stripe` - stripe
+        * `gcash` - gcash
+    Register:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+          maxLength: 128
+          minLength: 8
+        display_name:
+          type: string
+          maxLength: 120
+      required:
+      - email
+      - password
+    RewardCreate:
+      type: object
+      properties:
+        flyer_id:
+          type: string
+          format: uuid
+        provider:
+          $ref: '#/components/schemas/ProviderEnum'
+        amount_cents:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          maxLength: 8
+      required:
+      - flyer_id
+      - provider
+    RewardInit:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        provider:
+          type: string
+        status:
+          type: string
+        amount_cents:
+          type: integer
+        currency:
+          type: string
+        checkout_url:
+          type: string
+        qr_payload:
+          type: string
+      required:
+      - amount_cents
+      - checkout_url
+      - currency
+      - provider
+      - qr_payload
+      - status
+      - transaction_id
+    SpeciesEnum:
+      enum:
+      - dog
+      - cat
+      - bird
+      - horse
+      - other
+      type: string
+      description: |-
+        * `dog` - Dog
+        * `cat` - Cat
+        * `bird` - Bird
+        * `horse` - Horse
+        * `other` - Other
+    StatusE57Enum:
+      enum:
+      - lost
+      - adoptable
+      - reunited
+      - adopted
+      type: string
+      description: |-
+        * `lost` - Lost
+        * `adoptable` - Adoptable
+        * `reunited` - Reunited
+        * `adopted` - Adopted
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        display_name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 32
+        avatar_path:
+          type: string
+          maxLength: 512
+        google_id:
+          type: string
+          readOnly: true
+          nullable: true
+        email_verified:
+          type: boolean
+          readOnly: true
+      required:
+      - email
+      - email_verified
+      - google_id
+      - id
