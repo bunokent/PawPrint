@@ -3,7 +3,7 @@
 Environment-driven with dev defaults. When running under pytest (or with
 PAWPRINT_TESTING=1, e.g. for Playwright E2E without docker) the settings switch to
 in-memory channel layer, eager Celery, local filesystem storage and locmem cache so the
-suite never needs Redis/MinIO.
+suite never needs Redis/Cloudinary.
 """
 
 import os
@@ -38,7 +38,6 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "corsheaders",
     "channels",
-    "storages",
     # local apps
     "apps.common",
     "apps.users",
@@ -200,17 +199,12 @@ CELERY_TASK_ROUTES = {
 CELERY_TASK_DEFAULT_QUEUE = "default"
 
 # ---------------------------------------------------------------------------
-# Storage — S3-compatible private bucket (MinIO local, R2/S3 prod)
+# Storage — Cloudinary private delivery (signed URLs). Filesystem under TESTING.
 # ---------------------------------------------------------------------------
-AWS_STORAGE_BUCKET_NAME = os.environ.get("AWS_STORAGE_BUCKET_NAME", "pawprint-private")
-AWS_S3_ENDPOINT_URL = os.environ.get("AWS_S3_ENDPOINT_URL", "http://127.0.0.1:9000")
-AWS_ACCESS_KEY_ID = os.environ.get("AWS_ACCESS_KEY_ID", "minioadmin")
-AWS_SECRET_ACCESS_KEY = os.environ.get("AWS_SECRET_ACCESS_KEY", "minioadmin")
-AWS_S3_REGION_NAME = os.environ.get("AWS_S3_REGION_NAME", "us-east-1")
-AWS_S3_USE_SSL = os.environ.get("AWS_S3_USE_SSL", "0") == "1"
-AWS_QUERYSTRING_AUTH = True  # private bucket: pre-signed URLs only
-AWS_DEFAULT_ACL = None
-AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+CLOUDINARY_URL = os.environ.get("CLOUDINARY_URL", "")  # cloudinary://<key>:<secret>@<cloud_name>
+CLOUDINARY_CLOUD_NAME = os.environ.get("CLOUDINARY_CLOUD_NAME", "")
+CLOUDINARY_API_KEY = os.environ.get("CLOUDINARY_API_KEY", "")
+CLOUDINARY_API_SECRET = os.environ.get("CLOUDINARY_API_SECRET", "")
 
 if TESTING:
     STORAGES = {
@@ -220,7 +214,7 @@ if TESTING:
     MEDIA_ROOT = BASE_DIR / ".test-media"
 else:
     STORAGES = {
-        "default": {"BACKEND": "storages.backends.s3.S3Storage"},
+        "default": {"BACKEND": "apps.common.cloudinary_storage.CloudinaryStorage"},
         "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
     }
 

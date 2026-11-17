@@ -43,11 +43,11 @@ description: Engineering and UI conventions for PawPrint. Always follow the `tas
   - Zod + React Hook Form for all forms.
 
 ## AI Pet Detection Gatekeeper (YOLOv8 — Replaces Moderation/Bans)
-- Every uploaded pet photo passes `PetDetectionService.validate_pet_image(image_bytes)` BEFORE uploading to S3.
+- Every uploaded pet photo passes `PetDetectionService.validate_pet_image(image_bytes)` BEFORE uploading to private cloud storage (Cloudinary).
 - Uses `ultralytics.YOLO("yolov8n.pt")` (singleton/cached model instance) checking COCO animal/pet class IDs:
   - `14`: bird, `15`: cat, `16`: dog, `17`: horse, `18`: sheep, `19`: cow (configurable confidence threshold, default `>= 0.45`).
-- **If a pet is detected**: Strip EXIF metadata via Pillow, generate thumbnail, and upload to private S3.
-- **If NO pet is detected**: Discard immediately (never save to S3) and raise `NoPetDetectedError` → HTTP `422 Unprocessable Entity` with clear message (`"No pet detected in the photo. Please upload a clear photo of your pet."`) and detected labels so the user can retry.
+- **If a pet is detected**: Strip EXIF metadata via Pillow, generate thumbnail, and upload to private Cloudinary storage (delivery type `private`, signed URLs only).
+- **If NO pet is detected**: Discard immediately (never saved to storage) and raise `NoPetDetectedError` → HTTP `422 Unprocessable Entity` with clear message (`"No pet detected in the photo. Please upload a clear photo of your pet."`) and detected labels so the user can retry.
 - **Zero penalties**: No user strikes, no suspensions, no banning. Users can immediately select another photo.
 
 ## Git Commit Discipline (MANDATORY)

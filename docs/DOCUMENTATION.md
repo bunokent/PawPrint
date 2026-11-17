@@ -29,16 +29,16 @@ Playwright E2E covers the 6 critical journeys end-to-end.
   **No Django Admin** — `django.contrib.admin` is completely removed.
 - **Frontend**: React 19 + TypeScript + Vite, React Router v7, TanStack Query v5, Axios,
   Zustand, React Hook Form + Zod, Shadcn/UI, Tailwind v4. React Compiler enabled.
-- **Storage**: S3-compatible (MinIO local, R2/S3 prod) via django-storages + boto3 — private
-  bucket, pre-signed URLs only.
+- **Storage**: Cloudinary (private delivery type, HMAC-signed URLs only) via the `cloudinary`
+  SDK, wrapped in a Django `Storage` backend (`apps/common/cloudinary_storage.py`).
 - **Payments**: Stripe Python SDK (test mode) + PayMongo REST via httpx (GCash Checkout, QR Ph).
 - **AI Vision**: YOLOv8 (`ultralytics`, `yolov8n.pt`) pet detection gatekeeper.
 - **Exports**: WeasyPrint A4@300dpi PNG/PDF flyers + Pillow thumbnails; Playwright for
   browser-side exports.
-- **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `minio`, `mailpit`.
-  For tests and Playwright E2E, `PAWPRINT_TESTING=1` (or running under pytest) switches to
-  locmem cache, in-memory channel layer, eager Celery, `memory://` broker and filesystem
-  storage — no Redis/MinIO needed.
+- **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `mailpit` (storage is
+  Cloudinary, so no MinIO service). For tests and Playwright E2E, `PAWPRINT_TESTING=1` (or
+  running under pytest) switches to locmem cache, in-memory channel layer, eager Celery,
+  `memory://` broker and filesystem storage — no Redis/Cloudinary needed.
 
 ## 3. Access Model (Guest vs Registered — STRICT 2 Modes)
 
@@ -126,7 +126,7 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   same target as an SVG data-URL QR (`QrImage`) on the detail page and inside the A4 export.
 - On create/update, `FlyerService` dispatches Celery task `generate_flyer_assets` (queue
   `flyers`): renders the HTML flyer template with WeasyPrint to A4 PDF + Playwright A4@300dpi
-  PNG, uploads to private S3, marks the flyer `active`, then broadcasts `flyer.generated`
+  PNG, uploads to private Cloudinary, marks the flyer `active`, then broadcasts `flyer.generated`
   over Django Channels (`ws/flyers/`).
 - Flyer templates (`templates/flyers/{emergency,outreach}.html`) and the on-screen
   `.print-sheet` follow the `taste` skill print typography (`@page { size: A4; margin: 0 }`,
@@ -139,9 +139,9 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 - `PetDetectionService.validate_pet_image(image_bytes)` runs a singleton
   `ultralytics.YOLO("yolov8n.pt")` against COCO pet classes (14 bird, 15 cat, 16 dog,
   17 horse, 18 sheep, 19 cow) at confidence ≥ 0.45 (configurable).
-- **Pass**: EXIF stripped via Pillow, thumbnail generated, upload to private S3,
-  `PetDetectionLog(passed=True)`, pre-signed preview URL returned.
-- **Fail**: bytes discarded before any S3 write, `PetDetectionLog(passed=False)`,
+- **Pass**: EXIF stripped via Pillow, thumbnail generated, upload to private Cloudinary
+  (delivery type `private`), `PetDetectionLog(passed=True)`, signed preview URL returned.
+- **Fail**: bytes discarded before any storage write, `PetDetectionLog(passed=False)`,
   `NoPetDetectedError` → HTTP 422 `{"error":{"code":"no_pet_detected","message":…,
   "detected_labels":[…]}}` so the user can retry instantly. Zero penalties.
 - Frontend UX (`PhotoUpload`): the 422 renders a friendly `no-pet-error` box ("No strikes, no
@@ -197,8 +197,9 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   → **79 passed, 94.0% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`);
   `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
   `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
-  `(provider, event_id)` → single processing); 422-before-S3 tests (non-pet bytes never touch
-  storage); `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
+  `(provider, event_id)` → single processing); 422-before-storage tests (non-pet bytes never
+  reach Cloudinary); Cloudinary driver unit tests (SDK mocked, 100% on the driver);
+  `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
 - Frontend: `npm run test:run` → **65 Vitest tests, 6 files** (RTL + MSW, jsdom);
   `npm run test:coverage` → **88.5% stmts / 81.0% branches / 85.4% funcs / 89.2% lines**
   (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
@@ -229,9 +230,9 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `docs:pdf` (md-to-pdf) → `docs/documentation.pdf` generated and committed.
 - **Phase 1** — Backend foundation in `backend/`: `pyproject.toml` (Django 5.2 LTS, DRF,
   drf-spectacular, psycopg, redis, celery, channels(+redis), django-allauth[socialaccount],
-  django-cors-headers, django-storages[s3], Pillow, qrcode, stripe, httpx, ultralytics,
+  django-cors-headers, cloudinary, Pillow, qrcode, stripe, httpx, ultralytics,
   weasyprint + pytest/factory-boy/responses/ruff/mypy dev deps). `django.contrib.admin`
-  fully removed. `docker-compose.yml` (postgres:16, redis:7, minio, mailpit, celery, web) +
+  fully removed. `docker-compose.yml` (postgres:16, redis:7, mailpit, celery, web) +
   `.env.example`. Models with constraints/indexes: `users.User` (UUID PK, email login,
   google_id, stripe_customer_id), `pets.Pet` (SearchVector GIN, JSON GIN, composite
   `(status, created_at)`), `flyers.Flyer` (CheckConstraint reward>0, `(mode,status,created_at)`,
@@ -252,12 +253,12 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   creator-only `POST /api/flyers/new`, `PATCH/DELETE /api/flyers/{id}/edit`
   (`IsOwnerOrReadOnly`), `GET /api/flyers/mine`. `FlyerService` dispatches Celery
   `generate_flyer_assets` (queue `flyers`) → WeasyPrint A4 PDF + Playwright A4@300dpi PNG →
-  private S3 → `flyer.generated` broadcast over Channels (`ws/flyers/`). A4 templates
-  `templates/flyers/{emergency,outreach}.html` with dual palettes.
+  private cloud storage → `flyer.generated` broadcast over Channels (`ws/flyers/`). A4
+  templates `templates/flyers/{emergency,outreach}.html` with dual palettes.
 - **Phase 3.5** — YOLOv8 gatekeeper: `PetDetectionService` singleton `YOLO("yolov8n.pt")`,
   COCO pet classes {14,15,16,17,18,19} @ conf ≥ 0.45 (configurable). Pass → EXIF stripped
-  (Pillow) → private S3 → thumbnail task (queue `images`) → signed URL + detected labels.
-  Fail → bytes discarded pre-S3, `PetDetectionLog(passed=False)`, HTTP 422
+  (Pillow) → private cloud storage → thumbnail task (queue `images`) → signed URL + detected
+  labels. Fail → bytes discarded before any storage write, `PetDetectionLog(passed=False)`, HTTP 422
   `no_pet_detected` with detected labels; zero strikes/bans. `POST /api/pets/photos`
   (auth, `upload` throttle 10/min — 429 on 11th). ultralytics 8.4.215 + torch 2.15 CPU
   installed in the venv.
@@ -297,10 +298,20 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   scan on `flyer_status_created_idx`, PK joins, **0.21 ms / 14 buffer hits** at seed scale; FTS
   GIN index `pet_search_vector_gin`; reward webhook path = short transaction +
   `select_for_update` + unique `(provider, event_id)` dedupe. Confirmed by tests: throttles
-  429 (auth 20/min, upload 10/min), webhook idempotency, 422-before-S3 (non-pet bytes never
-  stored), print CSS (`@page A4`, `.print-sheet`, `.no-print`), 401 `session_expired` flag.
-  Docs updated (all 12 sections) + `docs/documentation.pdf` regenerated.
+  429 (auth 20/min, upload 10/min), webhook idempotency, 422-before-storage (non-pet bytes
+  never stored), print CSS (`@page A4`, `.print-sheet`, `.no-print`), 401 `session_expired`
+  flag. Docs updated (all 12 sections) + `docs/documentation.pdf` regenerated.
+- **Phase 8** — Storage migration: MinIO/S3 → **Cloudinary**. `docker-compose.yml` drops the
+  `minio`/`minio-setup` services and volume; `django-storages[s3]` + `boto3` replaced by the
+  `cloudinary` SDK. New Django `Storage` backend `apps/common/cloudinary_storage.py`
+  (`CloudinaryStorage`): uploads with delivery `type="private"`, `overwrite=True`; reads and
+  URLs are HMAC-signed (`cloudinary_url(..., sign_url=True, expires_at=…)`); pdf/png/jpg map to
+  resource_type `image`. Config via `CLOUDINARY_URL` (or discrete `CLOUDINARY_CLOUD_NAME` /
+  `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET`) in `.env`; `PAWPRINT_TESTING=1` still uses
+  filesystem storage. 11 new driver unit tests (SDK mocked) → driver at **100%**; suite:
+  **90 passed @ 94.2%**, ruff + mypy clean. (The "p variable is not set" compose warnings were
+  the removed MinIO env vars.)
 
-**Final status:** backend **79 passed @ 94.0%** (100% services/drivers/vision); frontend
-**65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests green**;
-`ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
+**Final status:** backend **90 passed @ 94.2%** (100% services/drivers/vision/storage);
+frontend **65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
+green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.

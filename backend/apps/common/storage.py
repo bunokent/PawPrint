@@ -1,4 +1,4 @@
-"""Storage helpers — all objects live in a PRIVATE bucket; access via pre-signed URLs."""
+"""Storage helpers — all objects are PRIVATE (Cloudinary private delivery); access via signed URLs."""
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import Storage, default_storage
@@ -23,7 +23,7 @@ def read_bytes(key: str) -> bytes:
 
 
 def signed_url(key: str, expires: int = 3600) -> str:
-    """Pre-signed URL for a private object (S3: querystring auth; FS backend: media URL)."""
+    """Signed URL for a private object (Cloudinary: HMAC-signed; FS backend: media URL)."""
     storage = get_storage()
     url = getattr(storage, "url", None)
     if url is None:

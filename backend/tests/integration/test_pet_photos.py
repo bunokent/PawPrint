@@ -61,7 +61,7 @@ def test_upload_non_pet_photo_422(auth_client, monkeypatch):
     assert body["error"]["code"] == "no_pet_detected"
     assert "No pet detected" in body["error"]["message"]
     assert body["error"]["detected_labels"] == ["person", "car"]
-    # logged as failed, and no S3 object was written (zero penalties, just a log)
+    # logged as failed, and no storage object was written (zero penalties, just a log)
     assert PetDetectionLog.objects.filter(passed=False).count() == 1
     from django.core.files.storage import default_storage
 
