@@ -1,0 +1,421 @@
+import { startTransition, useActionState, useOptimistic, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { useAuth } from "@/stores/auth";
+import { ApiError } from "@/lib/api/client";
+import { Button } from "@/components/ui/button";
+import { FieldShell, Input, Textarea } from "@/components/ui/field";
+import { ErrorBox } from "@/components/ui/feedback";
+import { PhotoUpload } from "@/features/pets/components/PhotoUpload";
+import { useCreatePet, type Pet, type PhotoUploadResult } from "@/features/pets/api";
+import { useCreateFlyer, type Flyer, type Mode } from "@/features/flyers/api";
+import { FlyerCard } from "@/components/FlyerCard";
+
+const SPECIES = ["dog", "cat", "bird", "horse", "other"] as const;
+
+const petSchema = z.object({
+  name: z.string().min(1, "Give the pet a name.").max(120),
+  species: z.enum(SPECIES),
+  breed: z.string().max(120).optional().or(z.literal("")),
+  color: z.string().max(120).optional().or(z.literal("")),
+  age: z.string().regex(/^\d{1,2}$/, "Age in years (up to 2 digits).").optional().or(z.literal("")),
+  temperament_tags: z.string().optional().or(z.literal("")),
+});
+type PetValues = z.infer<typeof petSchema>;
+
+const flyerSchema = z
+  .object({
+    last_seen_location: z.string().max(255).optional().or(z.literal("")),
+    last_seen_date: z.string().optional().or(z.literal("")),
+    distinctive_markings: z.string().max(1000).optional().or(z.literal("")),
+    contact_phone: z.string().max(32).optional().or(z.literal("")),
+    contact_email: z.email("Enter a valid email.").optional().or(z.literal("")),
+    reward_enabled: z.boolean(),
+    reward_pesos: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/, "Enter an amount in pesos, e.g. 5000.")
+      .optional()
+      .or(z.literal("")),
+  })
+  .superRefine((v, ctx) => {
+    if (v.reward_enabled && (!v.reward_pesos || Number(v.reward_pesos) <= 0)) {
+      ctx.addIssue({ code: "custom", path: ["reward_pesos"], message: "Enter a reward amount above zero." });
+    }
+  });
+type FlyerValues = z.infer<typeof flyerSchema>;
+
+interface StepState {
+  error: string | null;
+}
+
+const initialStepState: StepState = { error: null };
+
+function parseTags(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
+function draftFlyer(pet: Pet, photo: PhotoUploadResult, mode: Mode, values: FlyerValues): Flyer {
+  const now = new Date().toISOString();
+  return {
+    id: "pending",
+    mode,
+    status: "generating",
+    pet,
+    creator: "",
+    creator_display_name: "",
+    last_seen_location: values.last_seen_location,
+    last_seen_date: values.last_seen_date ? new Date(values.last_seen_date).toISOString() : null,
+    distinctive_markings: values.distinctive_markings,
+    contact_phone: values.contact_phone,
+    contact_email: values.contact_email,
+    reward_enabled: values.reward_enabled,
+    reward_amount_cents: Math.round(Number(values.reward_pesos || 0) * 100),
+    reward_currency: "PHP",
+    qr_target_type: "flyer_url",
+    qr_target_value: "",
+    photo_url: photo.url,
+    export_png_url: "",
+    export_pdf_url: "",
+    created_at: now,
+    updated_at: now,
+  } as Flyer;
+}
+
+export function BuilderWizard() {
+  const [params] = useSearchParams();
+  const { user, checked } = useAuth();
+  const [step, setStep] = useState(0);
+  const [mode, setMode] = useState<Mode>(params.get("mode") === "outreach" ? "outreach" : "emergency");
+  const [photo, setPhoto] = useState<PhotoUploadResult | null>(null);
+  const [pet, setPet] = useState<Pet | null>(null);
+
+  if (checked && !user) {
+    return (
+      <section style={{ padding: "72px 0" }}>
+        <div className="wrap" style={{ maxWidth: 520 }}>
+          <h1 className="t-h1" data-enter style={{ fontSize: "clamp(28px, 4vw, 40px)", marginBottom: 12 }}>
+            Register to post a flyer
+          </h1>
+          <p className="t-lead" data-enter="2" style={{ marginBottom: 24 }}>
+            Browsing is open to everyone — posting needs a free account so finders can reach you.
+          </p>
+          <div className="btn-row" data-enter="3">
+            <Button asChild>
+              <Link to="/auth/register">Register free</Link>
+            </Button>
+            <Button variant="secondary" asChild>
+              <Link to="/auth/login">Log in</Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section style={{ padding: "64px 0" }}>
+      <div className="wrap" style={{ maxWidth: 720 }}>
+        <p className="t-label" data-enter style={{ marginBottom: 8 }}>
+          New flyer — step {step + 1} of 3
+        </p>
+        <div className="step-row" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className={`step-dot ${i === step ? "step-dot--on" : i < step ? "step-dot--done" : ""}`} />
+          ))}
+        </div>
+        <h1 className="t-h1" data-enter="2" style={{ fontSize: "clamp(28px, 4vw, 42px)", marginBottom: 32 }}>
+          {step === 0 && (mode === "emergency" ? "Report a lost pet" : "Post an adoptable pet")}
+          {step === 1 && "Tell us about the pet"}
+          {step === 2 && "Flyer details & reward"}
+        </h1>
+
+        {step === 0 && (
+          <StepPhotoMode
+            mode={mode}
+            setMode={setMode}
+            photo={photo}
+            onUploaded={(r) => {
+              setPhoto(r);
+              setStep(1);
+            }}
+          />
+        )}
+        {step === 1 && photo && <StepPet photo={photo} mode={mode} onDone={(p) => { setPet(p); setStep(2); }} />}
+        {step === 2 && photo && pet && user && <StepFlyer pet={pet} photo={photo} mode={mode} userEmail={user.email} />}
+      </div>
+    </section>
+  );
+}
+
+function StepPhotoMode({
+  mode,
+  setMode,
+  photo,
+  onUploaded,
+}: {
+  mode: Mode;
+  setMode: (m: Mode) => void;
+  photo: PhotoUploadResult | null;
+  onUploaded: (r: PhotoUploadResult) => void;
+}) {
+  return (
+    <div className="card" style={{ padding: 28, display: "flex", flexDirection: "column", gap: 24 }} data-enter="3">
+      <div className="btn-row" role="group" aria-label="Flyer mode">
+        <Button
+          type="button"
+          variant={mode === "emergency" ? "emergency" : "secondary"}
+          aria-pressed={mode === "emergency"}
+          onClick={() => setMode("emergency")}
+        >
+          Lost — urgent
+        </Button>
+        <Button
+          type="button"
+          variant={mode === "outreach" ? "sage" : "secondary"}
+          aria-pressed={mode === "outreach"}
+          onClick={() => setMode("outreach")}
+        >
+          Adoptable
+        </Button>
+      </div>
+      <p className="t-body" style={{ color: "var(--color-muted)" }}>
+        {mode === "emergency"
+          ? "We'll build a scannable, print-ready alert with last-seen details and an optional reward."
+          : "We'll build a warm adoption flyer with personality tags and contact details."}
+      </p>
+      <FieldShell
+        label="Pet photo"
+        hint="Every photo is checked by our pet detector before upload — a non-pet photo is simply rejected, never penalised."
+      >
+        <PhotoUpload onUploaded={onUploaded} uploaded={photo} />
+      </FieldShell>
+    </div>
+  );
+}
+
+function StepPet({
+  photo,
+  mode,
+  onDone,
+}: {
+  photo: PhotoUploadResult;
+  mode: Mode;
+  onDone: (pet: Pet) => void;
+}) {
+  const createPet = useCreatePet();
+  const form = useForm<PetValues>({
+    resolver: zodResolver(petSchema),
+    defaultValues: { name: "", species: "dog", breed: "", color: "", age: "", temperament_tags: "" },
+  });
+  const [state, submit, pending] = useActionState(async (_prev: StepState, values: PetValues): Promise<StepState> => {
+    try {
+      const pet = await createPet.mutateAsync({
+        name: values.name.trim(),
+        species: values.species,
+        breed: values.breed || undefined,
+        color: values.color || undefined,
+        age: values.age ? Number(values.age) : null,
+        temperament_tags: parseTags(values.temperament_tags ?? ""),
+        photo_path: photo.key,
+        status: mode === "emergency" ? "lost" : "adoptable",
+      });
+      onDone(pet);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof ApiError ? e.message : "Could not save the pet. Please try again." };
+    }
+  }, initialStepState);
+
+  return (
+    <div className="card" style={{ padding: 28 }}>
+      <form onSubmit={form.handleSubmit((v) => startTransition(() => submit(v)))} style={{ display: "flex", flexDirection: "column", gap: 16 }} noValidate>
+        <FieldShell label="Pet name" htmlFor="pet-name" error={form.formState.errors.name?.message}>
+          <Input id="pet-name" autoComplete="off" aria-invalid={Boolean(form.formState.errors.name)} {...form.register("name")} />
+        </FieldShell>
+        <div className="split-2" style={{ gap: 16 }}>
+          <FieldShell label="Species" htmlFor="pet-species" error={form.formState.errors.species?.message}>
+            <select id="pet-species" className="select" {...form.register("species")}>
+              {SPECIES.map((s) => (
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </option>
+              ))}
+            </select>
+          </FieldShell>
+          <FieldShell label="Age (years)" htmlFor="pet-age" error={form.formState.errors.age?.message}>
+            <Input id="pet-age" inputMode="numeric" aria-invalid={Boolean(form.formState.errors.age)} {...form.register("age")} />
+          </FieldShell>
+        </div>
+        <div className="split-2" style={{ gap: 16 }}>
+          <FieldShell label="Breed" htmlFor="pet-breed" error={form.formState.errors.breed?.message}>
+            <Input id="pet-breed" autoComplete="off" {...form.register("breed")} />
+          </FieldShell>
+          <FieldShell label="Color" htmlFor="pet-color" error={form.formState.errors.color?.message}>
+            <Input id="pet-color" autoComplete="off" {...form.register("color")} />
+          </FieldShell>
+        </div>
+        <FieldShell
+          label="Personality tags"
+          htmlFor="pet-tags"
+          hint="Comma-separated, e.g. friendly, good with kids, house-trained"
+          error={form.formState.errors.temperament_tags?.message}
+        >
+          <Input id="pet-tags" autoComplete="off" {...form.register("temperament_tags")} />
+        </FieldShell>
+        {state.error && <ErrorBox message={state.error} />}
+        <div className="btn-row">
+          <Button type="submit" disabled={pending}>
+            {pending ? "Saving…" : "Continue"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function StepFlyer({
+  pet,
+  photo,
+  mode,
+  userEmail,
+}: {
+  pet: Pet;
+  photo: PhotoUploadResult;
+  mode: Mode;
+  userEmail: string;
+}) {
+  const navigate = useNavigate();
+  const createFlyer = useCreateFlyer();
+  const [rewardOn, setRewardOn] = useState(mode === "emergency");
+  const form = useForm<FlyerValues>({
+    resolver: zodResolver(flyerSchema),
+    defaultValues: {
+      last_seen_location: "",
+      last_seen_date: "",
+      distinctive_markings: "",
+      contact_phone: "",
+      contact_email: userEmail,
+      reward_enabled: mode === "emergency",
+      reward_pesos: "",
+    },
+  });
+
+  // Instant insert: while the create call is in flight, the new flyer card shows optimistically.
+  const [optimisticFlyer, addOptimistic] = useOptimistic<Flyer | null, Flyer | null>(null, (_cur, f) => f);
+  const [state, submit, pending] = useActionState(async (_prev: StepState, values: FlyerValues): Promise<StepState> => {
+    // The action runs inside a transition, so the optimistic card shows while pending.
+    addOptimistic(draftFlyer(pet, photo, mode, values));
+    try {
+      const flyer = await createFlyer.mutateAsync({
+        pet_id: pet.id,
+        mode,
+        last_seen_location: values.last_seen_location || undefined,
+        last_seen_date: values.last_seen_date ? new Date(values.last_seen_date).toISOString() : null,
+        distinctive_markings: values.distinctive_markings || undefined,
+        contact_phone: values.contact_phone || undefined,
+        contact_email: values.contact_email || undefined,
+        reward_enabled: values.reward_enabled,
+        reward_amount_cents: values.reward_enabled ? Math.round(Number(values.reward_pesos) * 100) : 0,
+        reward_currency: "PHP",
+      });
+      navigate(`/flyers/${flyer.id}`);
+      return { error: null };
+    } catch (e) {
+      return { error: e instanceof ApiError ? e.message : "Could not publish the flyer. Please try again." };
+    }
+  }, initialStepState);
+
+  if (pending && optimisticFlyer) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }} data-testid="publishing">
+        <p className="t-lead">Publishing your flyer…</p>
+        <div style={{ maxWidth: 320 }}>
+          <FlyerCard flyer={optimisticFlyer} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 28 }}>
+      <form onSubmit={form.handleSubmit((v) => startTransition(() => submit(v)))} style={{ display: "flex", flexDirection: "column", gap: 16 }} noValidate>
+        {mode === "emergency" && (
+          <>
+            <FieldShell label="Last seen location" htmlFor="flyer-loc" error={form.formState.errors.last_seen_location?.message}>
+              <Input
+                id="flyer-loc"
+                placeholder="e.g. Barangay hall, Quezon City"
+                autoComplete="off"
+                aria-invalid={Boolean(form.formState.errors.last_seen_location)}
+                {...form.register("last_seen_location")}
+              />
+            </FieldShell>
+            <FieldShell label="Last seen date & time" htmlFor="flyer-date" error={form.formState.errors.last_seen_date?.message}>
+              <Input id="flyer-date" type="datetime-local" {...form.register("last_seen_date")} />
+            </FieldShell>
+            <FieldShell label="Distinctive markings" htmlFor="flyer-marks" error={form.formState.errors.distinctive_markings?.message}>
+              <Textarea
+                id="flyer-marks"
+                placeholder="e.g. white patch on left ear, blue collar"
+                {...form.register("distinctive_markings")}
+              />
+            </FieldShell>
+          </>
+        )}
+        <div className="split-2" style={{ gap: 16 }}>
+          <FieldShell label="Contact phone" htmlFor="flyer-phone" error={form.formState.errors.contact_phone?.message}>
+            <Input id="flyer-phone" type="tel" autoComplete="tel" {...form.register("contact_phone")} />
+          </FieldShell>
+          <FieldShell label="Contact email" htmlFor="flyer-email" error={form.formState.errors.contact_email?.message}>
+            <Input
+              id="flyer-email"
+              type="email"
+              autoComplete="email"
+              aria-invalid={Boolean(form.formState.errors.contact_email)}
+              {...form.register("contact_email")}
+            />
+          </FieldShell>
+        </div>
+
+        <div className="field">
+          <label style={{ display: "flex", gap: 10, alignItems: "center", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              style={{ width: 20, height: 20, accentColor: mode === "emergency" ? "var(--color-emergency)" : "var(--color-sage)" }}
+              checked={rewardOn}
+              onChange={(e) => {
+                setRewardOn(e.target.checked);
+                form.setValue("reward_enabled", e.target.checked);
+              }}
+            />
+            <span style={{ fontWeight: 600, fontSize: 14 }}>Offer a finder's reward</span>
+          </label>
+          {rewardOn && (
+            <FieldShell label="Reward amount (PHP)" htmlFor="flyer-reward" error={form.formState.errors.reward_pesos?.message}>
+              <Input
+                id="flyer-reward"
+                inputMode="decimal"
+                placeholder="e.g. 5000"
+                aria-invalid={Boolean(form.formState.errors.reward_pesos)}
+                {...form.register("reward_pesos")}
+              />
+            </FieldShell>
+          )}
+        </div>
+
+        {state.error && <ErrorBox message={state.error} />}
+        <div className="btn-row">
+          <Button type="submit" variant={mode === "emergency" ? "emergency" : "sage"} disabled={pending}>
+            {pending ? "Publishing…" : "Publish flyer"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}

@@ -40,18 +40,25 @@ class Command(BaseCommand):
             health_tags=["vaccinated", "spayed"], status=Pet.Status.ADOPTABLE,
         )
 
-        Flyer.objects.create(
+        emergency = Flyer.objects.create(
             pet=bruno, creator=owner, mode=Flyer.Mode.EMERGENCY,
             last_seen_location="Brgy. Poblacion, Makati", last_seen_date=timezone.now(),
             distinctive_markings="White patch on chest, torn left ear",
             contact_phone=owner.phone, contact_email=owner.email,
             reward_enabled=True, reward_amount_cents=500000, reward_currency="PHP",
-            qr_target_value="http://localhost:5173/flyers/__demo__", status=Flyer.Status.ACTIVE,
+            status=Flyer.Status.ACTIVE,
         )
-        Flyer.objects.create(
+        outreach = Flyer.objects.create(
             pet=luna, creator=shelter, mode=Flyer.Mode.OUTREACH,
             distinctive_markings="Loves window perches and slow blinks",
             contact_phone=shelter.phone, contact_email=shelter.email,
-            qr_target_value="http://localhost:5173/flyers/__demo__", status=Flyer.Status.ACTIVE,
+            status=Flyer.Status.ACTIVE,
         )
+        from django.conf import settings
+
+        from apps.flyers.qr import QrService
+
+        for flyer in (emergency, outreach):
+            flyer.qr_target_value = QrService.target_url(str(flyer.pk), settings.FRONTEND_BASE_URL)
+            flyer.save(update_fields=["qr_target_value"])
         self.stdout.write(self.style.SUCCESS("Seeded demo data (login: mia@example.com / demo1234)"))

@@ -329,15 +329,25 @@ paths:
       - rewards
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardStatus'
+          description: ''
   /api/rewards/mine:
     get:
-      operationId: rewards_mine_retrieve
+      operationId: rewards_mine_list
       tags:
       - rewards
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RewardStatus'
+          description: ''
 components:
   schemas:
     Flyer:
@@ -611,14 +621,6 @@ components:
       - thumb_key
       - thumb_url
       - url
-    ProviderEnum:
-      enum:
-      - stripe
-      - gcash
-      type: string
-      description: |-
-        * `stripe` - stripe
-        * `gcash` - gcash
     Register:
       type: object
       properties:
@@ -643,7 +645,7 @@ components:
           type: string
           format: uuid
         provider:
-          $ref: '#/components/schemas/ProviderEnum'
+          $ref: '#/components/schemas/RewardCreateProviderEnum'
         amount_cents:
           type: integer
           minimum: 1
@@ -653,6 +655,14 @@ components:
       required:
       - flyer_id
       - provider
+    RewardCreateProviderEnum:
+      enum:
+      - stripe
+      - gcash
+      type: string
+      description: |-
+        * `stripe` - stripe
+        * `gcash` - gcash
     RewardInit:
       type: object
       properties:
@@ -679,6 +689,57 @@ components:
       - qr_payload
       - status
       - transaction_id
+    RewardStatus:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        provider:
+          $ref: '#/components/schemas/RewardStatusProviderEnum'
+        status:
+          $ref: '#/components/schemas/RewardStatusStatusEnum'
+        amount_cents:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+        currency:
+          type: string
+          maxLength: 8
+        provider_reference:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - amount_cents
+      - created_at
+      - id
+      - provider
+      - provider_reference
+    RewardStatusProviderEnum:
+      enum:
+      - stripe
+      - gcash
+      type: string
+      description: |-
+        * `stripe` - Stripe (test mode)
+        * `gcash` - GCash (PayMongo)
+    RewardStatusStatusEnum:
+      enum:
+      - pending
+      - succeeded
+      - failed
+      - refunded
+      type: string
+      description: |-
+        * `pending` - Pending
+        * `succeeded` - Succeeded
+        * `failed` - Failed
+        * `refunded` - Refunded
     SpeciesEnum:
       enum:
       - dog

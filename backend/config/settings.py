@@ -1,8 +1,9 @@
 """PawPrint Django settings.
 
-Environment-driven with dev defaults. When running under pytest the settings switch to
+Environment-driven with dev defaults. When running under pytest (or with
+PAWPRINT_TESTING=1, e.g. for Playwright E2E without docker) the settings switch to
 in-memory channel layer, eager Celery, local filesystem storage and locmem cache so the
-test-suite never needs Redis/MinIO.
+suite never needs Redis/MinIO.
 """
 
 import os
@@ -11,7 +12,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-TESTING = "pytest" in sys.modules
+TESTING = "pytest" in sys.modules or os.environ.get("PAWPRINT_TESTING") == "1"
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-insecure-secret-key-change-me")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1" if not TESTING else "0") == "1"

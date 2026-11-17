@@ -45,6 +45,7 @@ class RewardStatusView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: RewardStatusSerializer})
     def get(self, request: Request, pk: uuid.UUID) -> Response:
         tx = get_transaction_by_id(pk)
         if tx is None:
@@ -57,6 +58,7 @@ class RewardStatusView(APIView):
 class MyRewardsView(APIView):
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(responses={200: RewardStatusSerializer(many=True)})
     def get(self, request: Request) -> Response:
         user_id = request.user.pk
         assert user_id is not None

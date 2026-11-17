@@ -1,0 +1,34 @@
+import type { HTMLAttributes } from "react";
+import { cn } from "@/lib/utils";
+
+type Mode = "emergency" | "outreach";
+
+export function ModeBadge({ mode, className }: { mode?: Mode } & HTMLAttributes<HTMLSpanElement>) {
+  const emergency = mode === "emergency";
+  return (
+    <span className={cn("badge", emergency ? "badge--emergency" : "badge--outreach", className)}>
+      {emergency ? "Lost — urgent" : mode === "outreach" ? "Adoptable" : "Flyer"}
+    </span>
+  );
+}
+
+export function RewardBadge({ amount, currency }: { amount: number; currency: string }) {
+  return (
+    <span className="badge badge--reward">
+      Reward {new Intl.NumberFormat("en-PH", { style: "currency", currency: currency || "PHP" }).format(amount / 100)}
+    </span>
+  );
+}
+
+export function StatusBadge({ status }: { status: string }) {
+  const map: Record<string, string> = {
+    active: "badge--outreach",
+    generating: "badge--neutral",
+    draft: "badge--neutral",
+    resolved: "badge--neutral",
+    pending: "badge--neutral",
+    succeeded: "badge--outreach",
+    failed: "badge--emergency",
+  };
+  return <span className={cn("badge", map[status] ?? "badge--neutral")}>{status}</span>;
+}
