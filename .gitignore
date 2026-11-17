@@ -26,6 +26,7 @@ backend/yolov8n.pt
 # Playwright / E2E artifacts
 frontend/test-results/
 frontend/playwright-report/
+*.tsbuildinfo
 
 # Env
 .env
