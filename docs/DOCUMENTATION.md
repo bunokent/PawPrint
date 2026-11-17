@@ -18,7 +18,9 @@ product:
   shelter/foster framing.
 
 Every uploaded pet photo passes a YOLOv8 pet-detection gatekeeper before it ever reaches
-storage. Non-pet photos are rejected with a friendly 422 — no strikes, no bans.
+storage. Non-pet photos are rejected with a friendly 422 — no strikes, no bans. The web app
+(`frontend/`, React 19 + TS + Vite) implements the full product in the browser, and
+Playwright E2E covers the 6 critical journeys end-to-end.
 
 ## 2. Architecture & Stack
 
@@ -34,6 +36,9 @@ storage. Non-pet photos are rejected with a friendly 422 — no strikes, no bans
 - **Exports**: WeasyPrint A4@300dpi PNG/PDF flyers + Pillow thumbnails; Playwright for
   browser-side exports.
 - **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `minio`, `mailpit`.
+  For tests and Playwright E2E, `PAWPRINT_TESTING=1` (or running under pytest) switches to
+  locmem cache, in-memory channel layer, eager Celery, `memory://` broker and filesystem
+  storage — no Redis/MinIO needed.
 
 ## 3. Access Model (Guest vs Registered — STRICT 2 Modes)
 
@@ -48,7 +53,9 @@ storage. Non-pet photos are rejected with a friendly 422 — no strikes, no bans
 | Fund rewards (Stripe / GCash) | ❌ | ✅ |
 
 There is **no admin role, no staff flag, no strike/ban system**. Object-level mutations are
-restricted to the creator via `IsOwnerOrReadOnly`.
+restricted to the creator via `IsOwnerOrReadOnly`. The frontend enforces the same split in
+the UI: guests see browse/scan actions, registered users additionally see New flyer, My
+flyers, photo upload and Fund reward.
 
 ## 4. Backend — Models & ORM
 
@@ -69,7 +76,9 @@ Apps under `backend/apps/`: `users`, `pets`, `flyers`, `rewards`, `webhooks`, `v
 
 Layering: `selectors/` (all reads, optimized QuerySets, SearchVector FTS, cursor pagination),
 `services/` (all writes in `@transaction.atomic`, external calls, task dispatch), thin views
-(≤15 lines, zero raw ORM).
+(≤15 lines, zero raw ORM). Verified with `EXPLAIN ANALYZE` (see §11): gallery list runs on
+`flyer_status_created_idx` in ~0.2 ms; FTS uses `pet_search_vector_gin`; reward writes use
+`select_for_update` + the unique `provider_reference` for idempotency.
 
 ## 5. API Reference (OpenAPI)
 
@@ -83,30 +92,47 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 | `POST /api/auth/logout` | Auth | End session |
 | `GET /api/auth/me` | Any | Profile or 401 |
 | `GET /api/auth/google/url` + `POST /api/auth/google/callback` | Guest | Google/Gmail OAuth 2.0 |
-| `GET /api/flyers` | Guest | Cursor-paginated gallery, FTS, mode filter |
-| `GET /api/flyers/{id}` | Guest | Public flyer detail (QR landing) |
-| `POST/PATCH/DELETE /api/flyers...` | Auth (owner) | Flyer CRUD + asset generation |
+| `GET /api/flyers` | Guest | Cursor-paginated gallery, FTS `?q=`, mode filter `?mode=` |
+| `GET /api/flyers/{id}` | Guest | Public flyer detail (QR scan landing) |
+| `POST /api/flyers/new` | Auth | Create flyer (dispatches A4 asset generation) |
+| `PATCH/DELETE /api/flyers/{id}/edit` | Auth (owner) | Update / resolve / delete own flyer |
+| `GET /api/flyers/mine` | Auth | Creator's own flyers |
 | `POST /api/pets/photos` | Auth | YOLOv8-gated photo upload (10/min) |
-| `POST /api/rewards` | Auth | Create reward payment (Stripe/GCash) |
-| `GET /api/rewards/{id}/status` | Auth | Poll payment status |
+| `POST /api/pets` | Auth | Create pet record (links an uploaded photo) |
+| `POST /api/rewards` | Auth | Create reward payment (Stripe/GCash) → checkout URL / QR payload |
+| `GET /api/rewards/{id}/status` | Auth (payer/creator) | Poll payment status |
+| `GET /api/rewards/mine` | Auth | Own reward history |
 | `POST /api/webhooks/stripe` / `POST /api/webhooks/paymongo` | Signature | Idempotent webhooks |
+| `GET /api/health` | Public | Liveness probe |
+| `GET /api/schema` | Public | drf-spectacular OpenAPI schema |
 
 ## 6. Auth & OAuth Flow
 
 - Email registration & login issue an HttpOnly session cookie plus a CSRF cookie; the
-  frontend axios client sends `X-CSRFToken` on mutations.
+  frontend axios client sends `X-CSRFToken` on mutations (`src/lib/api/client.ts`).
 - Google/Gmail OAuth 2.0 via django-allauth: one click registers a new Gmail account,
-  links an existing email account, or signs in an existing Google user.
-- Auth mutations are rate-limited to 20/min.
+  links an existing email account, or signs in an existing Google user. The SPA handles the
+  redirect at `/auth/login?code=…` (`LoginPage` exchanges the code via
+  `POST /api/auth/google/callback`).
+- Auth mutations are rate-limited to 20/min (`auth_write` scope; 429 on the 21st request).
+- Guests hitting an auth-only endpoint get 401 with `error.session_expired: true`
+  (`SessionAuthenticationWith401`), which the SPA uses to reset the auth store.
 
 ## 7. Flyers, QR & A4 Export
 
-- `QrService` mints a QR code targeting the public flyer URL (`/flyers/{id}`).
+- `QrService` mints a QR code targeting the public flyer URL —
+  `qr_target_value = {FRONTEND_BASE_URL}/flyers/{id}` (set on create and by `seed_demo`), so a
+  printed QR lands a scanner directly on the guest-accessible flyer page. The SPA renders the
+  same target as an SVG data-URL QR (`QrImage`) on the detail page and inside the A4 export.
 - On create/update, `FlyerService` dispatches Celery task `generate_flyer_assets` (queue
-  `flyers`): renders the HTML flyer template with WeasyPrint to A4@300dpi PNG + PDF, uploads
-  to private S3, then broadcasts `flyer.generated` over Django Channels.
-- Flyer templates follow the `taste` skill print typography: emergency mode uses
-  crimson/amber high-contrast scannability; outreach mode uses sage/teal/terracotta warmth.
+  `flyers`): renders the HTML flyer template with WeasyPrint to A4 PDF + Playwright A4@300dpi
+  PNG, uploads to private S3, marks the flyer `active`, then broadcasts `flyer.generated`
+  over Django Channels (`ws/flyers/`).
+- Flyer templates (`templates/flyers/{emergency,outreach}.html`) and the on-screen
+  `.print-sheet` follow the `taste` skill print typography (`@page { size: A4; margin: 0 }`,
+  `.no-print` chrome hidden): emergency mode uses crimson/amber high-contrast scannability;
+  outreach mode uses sage/teal/terracotta warmth. The detail page's Print button uses the
+  same sheet.
 
 ## 8. AI Pet Detection (YOLOv8 Gatekeeper)
 
@@ -116,8 +142,12 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 - **Pass**: EXIF stripped via Pillow, thumbnail generated, upload to private S3,
   `PetDetectionLog(passed=True)`, pre-signed preview URL returned.
 - **Fail**: bytes discarded before any S3 write, `PetDetectionLog(passed=False)`,
-  `NoPetDetectedError` → HTTP 422 with detected labels so the user can retry instantly.
-  Zero penalties.
+  `NoPetDetectedError` → HTTP 422 `{"error":{"code":"no_pet_detected","message":…,
+  "detected_labels":[…]}}` so the user can retry instantly. Zero penalties.
+- Frontend UX (`PhotoUpload`): the 422 renders a friendly `no-pet-error` box ("No strikes, no
+  bans — just pick another photo") and the picker stays open for an immediate retry; a passing
+  photo shows a "Pet detected ✓" badge. E2E journey ④ drives both photos through the real
+  YOLOv8n model (`e2e/fixtures/dog.jpg` passes @ ~0.81, `landscape.jpg` → 422).
 
 ## 9. Payments — Rewards (Stripe Test + GCash / QR Ph)
 
@@ -126,30 +156,70 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 - `RewardService` creates `RewardTransaction(status='pending')` atomically with
   `select_for_update`, then delegates to the driver.
 - Webhooks (`/api/webhooks/stripe`, `/api/webhooks/paymongo`) are CSRF-exempt, signature-
-  verified, deduplicated via `WebhookEvent(provider, event_id)`, and acknowledged with 200
-  in <50 ms while `process_reward_webhook` runs on the `webhooks` Celery queue.
+  verified (Stripe `Stripe-Signature`; PayMongo HMAC-SHA256 of `{t}.{payload}` in
+  `Paymongo-Signature: t=…,te=…`), deduplicated via `WebhookEvent(provider, event_id)`, and
+  acknowledged with 200 in <50 ms while `process_reward_webhook` runs on the `webhooks`
+  Celery queue with `select_for_update`.
+- Frontend UX: `RewardCheckoutModal` (amount + provider) → Stripe redirects off-site, or
+  GCash shows the QR payload in `GcashQrModal` and polls `GET /api/rewards/{id}/status` every
+  2 s until terminal, showing "Payment received — thank you!" on `succeeded`.
+  `POST /api/webhooks/paymongo` is exercised end-to-end in E2E journey ⑤ against a local stub
+  (valid signature → 200 + `succeeded`; forged signature → 400).
 
 ## 10. Frontend (React 19 + TS) Guide
 
 - Centralized axios client at `src/lib/api/client.ts` (`baseURL: '/api'`, credentials, CSRF
-  headers, `ApiError` normalization, 401 handling). All calls via `src/features/{domain}/api.ts`.
-- Pages: `/` Home, `/flyers` Gallery, `/flyers/:id` Public Flyer + QR, `/builder` 3-step
-  wizard, `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login`, `/auth/register`.
-- React 19 idioms: `useActionState` forms, `useOptimistic` gallery insert, ref-as-prop,
-  React Compiler in `vite.config.ts`. TanStack Query `queryOptions` factories + optimistic
-  mutations with rollback. Zod + RHF forms. `@media print` A4-exact stylesheet + Print button.
+  headers, `ApiError` normalization incl. `no_pet_detected` labels, 401/`session_expired`
+  handling). All calls via `src/features/{domain}/api.ts`; DTOs come only from the generated
+  `src/lib/api/schema.d.ts` (`npm run typegen` over `backend/schema.yml`).
+- Pages: `/` Home (emergency + outreach rails), `/flyers` Gallery (mode filter + FTS search +
+  cursor pagination), `/flyers/:id` Public Flyer + QR + print/export + owner resolve/delete +
+  reward checkout, `/builder` 3-step wizard (photo gate → pet form → details/reward),
+  `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login` (also handles the Google
+  `?code=` callback), `/auth/register`.
+- React 19 idioms: `useActionState` forms (dispatch wrapped in `startTransition` so `pending`
+  works), `useOptimistic` publishing card on flyer create, ref-as-prop, React Compiler in
+  `vite.config.ts` (disabled under Vitest so coverage maps to source). TanStack Query
+  `queryOptions` factories; reward status polls every 2 s while `pending`. Zod + RHF forms.
+  QR codes rendered as SVG data-URLs via the `qrcode` package (`src/components/QrImage.tsx`).
+  `@media print` A4-exact stylesheet (`@page { size: A4 }`, `.print-sheet`, `.no-print`) +
+  Print button.
+- Dev proxy: Vite proxies `/api`, `/media`, `/ws` to the backend; the origin is env-driven
+  (`PAWPRINT_API_URL`, default `http://127.0.0.1:8000`) so Playwright E2E can run the API on
+  another port.
 - Visual system per the `taste` skill: one type scale, one card recipe, equal edges,
   tactile hover/press, skeleton/empty/error states, dual palette (emergency crimson/amber vs
   outreach sage/teal/terracotta).
 
 ## 11. Testing & Coverage
 
-- Backend: `pytest -n auto --cov=apps --cov-fail-under=80` — 100% on Services, Drivers and
-  `PetDetectionService`; `django_assert_max_num_queries` ceilings on list/detail endpoints;
-  `responses` for Stripe/PayMongo HTTP; `factory-boy` factories.
-- Frontend: Vitest + React Testing Library + MSW (`npm run test:run`, ≥70% overall, 100% on
-  `features/rewards`); Playwright E2E for the 6 critical journeys.
+- Backend: `cd backend && .venv/bin/python -m pytest tests/ -q --cov=apps --cov-fail-under=80`
+  → **79 passed, 94.0% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`);
+  `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
+  `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
+  `(provider, event_id)` → single processing); 422-before-S3 tests (non-pet bytes never touch
+  storage); `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
+- Frontend: `npm run test:run` → **65 Vitest tests, 6 files** (RTL + MSW, jsdom);
+  `npm run test:coverage` → **88.5% stmts / 81.0% branches / 85.4% funcs / 89.2% lines**
+  (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
+  `npx tsc -b --noEmit` clean; `npm run build` green.
+- E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **6 journeys /
+  7 tests, all green**, fully self-contained: a stub PayMongo API (`e2e/stub-paymongo.mjs` on
+  :9100), the Django backend on :8010 with `PAWPRINT_TESTING=1` (eager Celery, locmem, local
+  PG :5433), and the Vite dev server on :5173 proxying to :8010. Journeys: ① guest browse →
+  filter → search → detail+QR, ② register → logout → login (demo account), ③ create an
+  emergency flyer through the 3-step wizard (YOLOv8-gated upload) → public detail page,
+  ④ landscape photo → 422 `no_pet_detected` retry UX → dog photo passes, ⑤ GCash reward
+  checkout → QR modal → HMAC-signed PayMongo webhook flips status to `succeeded` (and a
+  forged signature is 400), ⑥ open the flyer's `qr_target_value` like a scanner → public
+  detail page with SVG QR.
 - Static analysis: `mypy apps`, `ruff check apps`, `npm run build` (0 TS errors).
+- Performance spot-check (Phase 7, local PG :5433): `EXPLAIN ANALYZE` on the public gallery
+  query shows an index scan on `flyer_status_created_idx` + PK lookups for pet/owner/creator —
+  **0.21 ms execution, 14 shared buffer hits** at seed scale; FTS uses the
+  `pet_search_vector_gin` GIN index (planner seq-scans the 2-row seed table, switches to the
+  bitmap index at scale); the reward webhook path holds `select_for_update` inside a short
+  transaction and dedupes on the unique `(provider, event_id)`.
 
 ## 12. Tutorial (Living Build Log)
 
@@ -201,6 +271,36 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   deduped via `WebhookEvent(provider, event_id)`, 200 in <50 ms, processing on the
   `webhooks` queue with `select_for_update`.
 
-**Backend status after Phase 4:** `pytest -n auto --cov=apps --cov-fail-under=80` →
-79 passed, **94.5% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`);
-`ruff check apps config tests` clean; `mypy apps` clean (87 files).
+- **Phase 5** — Frontend app in `frontend/` (React 19 + TS + Vite + Router v7 + TanStack Query
+  v5 + Axios + Zustand + RHF/Zod + Tailwind v4, React Compiler on for app builds): pages Home,
+  Gallery (mode filter + FTS + cursor), Flyer detail (SVG QR, print/PDF/PNG, owner
+  resolve/delete double-click, reward modal), 3-step Builder wizard
+  (`useActionState` + `useOptimistic` publishing card), My flyers, Login (incl. Google
+  `?code=` callback), Register, Reward success/cancel. Features: `auth`, `pets`
+  (`PhotoUpload` 422-retry UX), `flyers`, `rewards` (`RewardCheckoutModal` + `GcashQrModal`
+  with 2 s status polling). DTOs generated via `openapi-typescript` →
+  `src/lib/api/schema.d.ts`; `@/` alias; `@media print` A4 sheet + `.no-print` chrome.
+  Backend contract tweaks: `@extend_schema` on reward status endpoints so `RewardStatus` is in
+  the generated schema; `seed_demo` now writes real `qr_target_value`s; `PAWPRINT_TESTING=1`
+  env switch in `config/settings.py`.
+- **Phase 6** — Tests. Backend re-verified: **79 passed, 94.0%** (100% services/drivers/
+  vision), ruff + mypy clean. Frontend: 6 Vitest files / **65 tests** (MSW handlers in
+  `src/test/`), coverage **88.5% stmts / 81.0% br / 85.4% fn / 89.2% lines** with
+  **`features/rewards` at 100%** (per-glob threshold in `vite.config.ts`); `tsc -b` clean;
+  `npm run build` green. Playwright E2E (`playwright.config.ts`, `npm run test:e2e`): 6
+  journeys / 7 tests green, self-contained — stub PayMongo on :9100
+  (`e2e/stub-paymongo.mjs`), backend on :8010 with `PAWPRINT_TESTING=1` (eager Celery, locmem,
+  PG :5433), Vite on :5173 proxying `/api`+`/media` (`PAWPRINT_API_URL`). Fixtures verified
+  against real YOLOv8n (`e2e/fixtures/dog.jpg` → dog @0.81, `landscape.jpg` → 422). Vite proxy
+  origin is env-driven; vitest excludes `e2e/**`.
+- **Phase 7** — Hardening verification + docs. `EXPLAIN ANALYZE` on the public gallery: index
+  scan on `flyer_status_created_idx`, PK joins, **0.21 ms / 14 buffer hits** at seed scale; FTS
+  GIN index `pet_search_vector_gin`; reward webhook path = short transaction +
+  `select_for_update` + unique `(provider, event_id)` dedupe. Confirmed by tests: throttles
+  429 (auth 20/min, upload 10/min), webhook idempotency, 422-before-S3 (non-pet bytes never
+  stored), print CSS (`@page A4`, `.print-sheet`, `.no-print`), 401 `session_expired` flag.
+  Docs updated (all 12 sections) + `docs/documentation.pdf` regenerated.
+
+**Final status:** backend **79 passed @ 94.0%** (100% services/drivers/vision); frontend
+**65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests green**;
+`ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
