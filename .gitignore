@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage*
+
+# Node
+node_modules/
+dist/
+coverage/
+.playwright/
+
+# Django
+*.log
+db.sqlite3
+media/
+staticfiles/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store

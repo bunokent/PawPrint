@@ -1,0 +1,9 @@
+{
+  "name": "pawprint",
+  "private": true,
+  "version": "0.1.0",
+  "description": "PawPrint — dual-mode lost-pet alert + adoption flyer generator",
+  "scripts": {
+    "docs:pdf": "npx --yes md-to-pdf docs/DOCUMENTATION.md docs/documentation.pdf"
+  }
+}
