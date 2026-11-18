@@ -145,9 +145,131 @@ a.card:hover, .card--link:hover { transform: translateY(-2px); box-shadow: var(-
 .photo-frame img { transition: transform 400ms ease; }
 .photo-frame:hover img { transform: scale(1.03); }
 
+/* Pet photo upload — fixed rectangle, tactile drop zone and live processing state */
+.photo-upload { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.photo-upload__input { display: none; }
+.photo-upload__frame {
+  position: relative;
+  width: 100%;
+  height: 380px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+.photo-upload__frame--dragging {
+  border-color: var(--color-sage);
+  box-shadow: 0 0 0 4px rgb(47 111 94 / 0.12), var(--shadow-lift);
+  transform: translateY(-2px);
+}
+.photo-upload__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 32px;
+  border: 2px dashed rgb(109 97 86 / 0.38);
+  border-radius: calc(var(--radius-lg) - 2px);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 180ms ease, border-color 180ms ease;
+}
+.photo-upload__empty:hover { background: var(--color-cream); border-color: var(--color-sage); }
+.photo-upload__empty:focus-visible { outline: 3px solid var(--color-amber); outline-offset: -6px; }
+.photo-upload__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 68px;
+  height: 68px;
+  margin-bottom: 8px;
+  border: 1px solid rgb(47 111 94 / 0.16);
+  border-radius: 20px;
+  background: rgb(47 111 94 / 0.1);
+  color: var(--color-sage-deep);
+  transition: transform 180ms ease, background-color 180ms ease;
+}
+.photo-upload__empty:hover .photo-upload__icon { transform: translateY(-2px); background: rgb(47 111 94 / 0.15); }
+.photo-upload__empty-title { font-family: var(--font-display); font-size: 24px; font-weight: 700; line-height: 1.25; }
+.photo-upload__empty-action { color: var(--color-sage-deep); font-size: 15px; font-weight: 600; }
+.photo-upload__empty-hint { max-width: 360px; margin-top: 8px; color: var(--color-muted); font-size: 13px; line-height: 1.5; }
+.photo-upload__uploaded-image { display: block; width: 100%; height: 100%; object-fit: cover; }
+.photo-upload__message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  color: var(--color-muted);
+  text-align: center;
+}
+.photo-upload__message p { margin: 0; }
+.photo-upload__processing { position: relative; width: 100%; height: 100%; padding: 24px; display: flex; align-items: center; justify-content: center; }
+.photo-upload__preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.photo-upload__frame--pending:hover .photo-upload__preview { transform: none; }
+.photo-upload__scrim { position: absolute; inset: 0; background: rgb(28 20 16 / 0.66); }
+.photo-upload__scan-line {
+  position: absolute;
+  z-index: 1;
+  top: 8%;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-amber);
+  box-shadow: 0 0 18px 3px rgb(255 179 0 / 0.4);
+  animation: photo-scan 2.4s ease-in-out infinite;
+}
+.photo-upload__status-card {
+  position: relative;
+  z-index: 2;
+  width: min(470px, 100%);
+  padding: 20px;
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: 16px;
+  background: rgb(255 253 248 / 0.96);
+  box-shadow: var(--shadow-lift);
+}
+.photo-upload__status-heading { display: flex; align-items: flex-start; gap: 12px; }
+.photo-upload__status-heading > div { min-width: 0; }
+.photo-upload__spinner { display: inline-flex; flex: 0 0 auto; margin-top: 2px; color: var(--color-sage); animation: photo-spin 1s linear infinite; }
+.photo-upload__status-title { margin: 0; color: var(--color-ink); font-size: 17px; font-weight: 700; line-height: 1.35; }
+.photo-upload__status-detail { margin: 3px 0 0; color: var(--color-muted); font-size: 13px; line-height: 1.45; }
+.photo-upload__progress-meta { display: flex; justify-content: space-between; gap: 12px; margin-top: 18px; color: var(--color-muted); font-size: 12px; font-weight: 600; }
+.photo-upload__progress { height: 8px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: rgb(28 20 16 / 0.1); }
+.photo-upload__progress-fill { display: block; width: 3%; height: 100%; border-radius: inherit; background: var(--color-sage); transition: width 180ms ease; }
+.photo-upload__progress-fill--indeterminate { width: 36%; animation: photo-progress 1.25s ease-in-out infinite; }
+.photo-upload__steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 16px 0 0; padding: 0; list-style: none; }
+.photo-upload__step { display: flex; flex-direction: column; align-items: center; gap: 5px; color: var(--color-muted); font-size: 11px; font-weight: 600; line-height: 1.2; }
+.photo-upload__step-marker { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--color-line); border-radius: 999px; background: var(--color-paper); font-size: 11px; }
+.photo-upload__step--current { color: var(--color-sage-deep); }
+.photo-upload__step--current .photo-upload__step-marker { border-color: var(--color-sage); box-shadow: 0 0 0 3px rgb(47 111 94 / 0.1); color: var(--color-sage-deep); }
+.photo-upload__step--done { color: var(--color-sage-deep); }
+.photo-upload__step--done .photo-upload__step-marker { border-color: var(--color-sage); background: var(--color-sage); color: #fff; }
+@keyframes photo-spin { to { transform: rotate(360deg); } }
+@keyframes photo-scan { 0%, 100% { top: 8%; opacity: 0.4; } 50% { top: 88%; opacity: 1; } }
+@keyframes photo-progress { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
+@media (max-width: 480px) {
+  .photo-upload__frame { height: 360px; }
+  .photo-upload__empty { padding: 24px 18px; }
+  .photo-upload__empty-title { font-size: 22px; }
+  .photo-upload__processing { padding: 16px; }
+  .photo-upload__status-card { padding: 16px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  [data-enter], .skeleton { animation: none; }
-  .btn, .card, .photo-frame img { transition: none; }
+  [data-enter], .skeleton, .photo-upload__spinner, .photo-upload__scan-line, .photo-upload__progress-fill--indeterminate { animation: none; }
+  .btn, .card, .photo-frame img, .photo-upload__frame, .photo-upload__empty, .photo-upload__icon, .photo-upload__progress-fill { transition: none; }
+  .photo-upload__scan-line { top: 50%; }
+  .photo-upload__progress-fill--indeterminate { width: 65%; }
 }
 
 /* Two-column split that stacks on small screens */

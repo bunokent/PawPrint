@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { useState } from "react";
 import { http, HttpResponse } from "msw";
-import { fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import type { AxiosProgressEvent } from "axios";
 import { PhotoUpload } from "@/features/pets/components/PhotoUpload";
 import type { PhotoUploadResult } from "@/features/pets/api";
+import { api } from "@/lib/api/client";
 import { mswServer } from "@/test/setup";
 import { renderWithProviders } from "@/test/utils";
 import { setUploadRejects } from "@/test/handlers";
@@ -73,5 +75,74 @@ describe("PhotoUpload (YOLOv8 gatekeeper UX)", () => {
     );
     expect(screen.getByAltText("Uploaded pet preview")).toHaveAttribute("src", "http://x/thumb.jpg");
     expect(screen.getByRole("button", { name: /Choose a different photo/ })).toBeInTheDocument();
+  });
+
+  it("uses the full-size drop zone and accepts a dragged photo", async () => {
+    const onUploaded = vi.fn();
+    renderWithProviders(<Harness spy={onUploaded} />);
+    const dropZone = screen.getByRole("button", { name: /Drop your pet’s photo here/ });
+    const frame = dropZone.closest(".photo-upload__frame");
+    expect(frame).not.toBeNull();
+
+    fireEvent.dragEnter(frame!);
+    expect(frame).toHaveClass("photo-upload__frame--dragging");
+    fireEvent.drop(frame!, {
+      dataTransfer: { files: [new File(["img-bytes"], "bento.jpg", { type: "image/jpeg" })] },
+    });
+
+    expect(frame).not.toHaveClass("photo-upload__frame--dragging");
+    expect(screen.getByRole("status")).toHaveTextContent("Uploading photo");
+    expect(await screen.findByAltText("Uploaded pet preview")).toBeInTheDocument();
+    expect(onUploaded).toHaveBeenCalledOnce();
+  });
+
+  it("shows upload progress and live scan, detect, and save stages", async () => {
+    vi.useFakeTimers();
+    let reportProgress: ((event: AxiosProgressEvent) => void) | undefined;
+    let finishUpload: (() => void) | undefined;
+    const result: PhotoUploadResult = {
+      key: "pets/photos/bento.jpg",
+      url: "http://x/full.jpg",
+      thumb_key: "t",
+      thumb_url: "http://x/thumb.jpg",
+      pet_classes: ["dog"],
+      detected_classes: ["dog"],
+      max_confidence: 0.92,
+    };
+    const post = vi.spyOn(api, "post").mockImplementation((_url, _body, config) => {
+      reportProgress = config?.onUploadProgress;
+      reportProgress?.({ loaded: 50, total: 100 } as AxiosProgressEvent);
+      return new Promise((resolve) => {
+        finishUpload = () => resolve({ data: result } as never);
+      });
+    });
+
+    try {
+      const onUploaded = vi.fn();
+      renderWithProviders(<PhotoUpload onUploaded={onUploaded} uploaded={null} />);
+      uploadFile();
+      await act(async () => Promise.resolve());
+
+      expect(screen.getByRole("status")).toHaveTextContent("Uploading photo");
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuenow", "50");
+      act(() => reportProgress?.({ loaded: 100, total: 100 } as AxiosProgressEvent));
+      expect(screen.getByRole("status")).toHaveTextContent("Scanning photo");
+      expect(screen.getByRole("progressbar")).toHaveAttribute("aria-valuetext", "Scanning photo");
+
+      act(() => vi.advanceTimersByTime(800));
+      expect(screen.getByRole("status")).toHaveTextContent("Detecting your pet");
+      act(() => vi.advanceTimersByTime(1000));
+      expect(screen.getByRole("status")).toHaveTextContent("Saving securely");
+      expect(document.querySelector(".photo-upload__progress-fill")).toHaveClass("photo-upload__progress-fill--indeterminate");
+
+      await act(async () => {
+        finishUpload?.();
+        await Promise.resolve();
+      });
+      expect(onUploaded).toHaveBeenCalledWith(expect.objectContaining({ key: result.key }));
+    } finally {
+      post.mockRestore();
+      vi.useRealTimers();
+    }
   });
 });

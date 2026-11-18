@@ -26,12 +26,23 @@ export interface PetCreateInput {
   status?: string;
 }
 
+interface PhotoUploadInput {
+  file: File;
+  onProgress: (percentage: number) => void;
+}
+
 export function useUploadPetPhoto() {
   return useMutation({
-    mutationFn: async (file: File) => {
+    mutationFn: async ({ file, onProgress }: PhotoUploadInput) => {
       const form = new FormData();
       form.append("photo", file);
-      const { data } = await api.post<PhotoUploadResult>("/pets/photos", form, multipartConfig());
+      const { data } = await api.post<PhotoUploadResult>("/pets/photos", form, {
+        ...multipartConfig(),
+        onUploadProgress: (event) => {
+          const total = event.total ?? file.size;
+          if (total > 0) onProgress(Math.min(100, Math.round((event.loaded / total) * 100)));
+        },
+      });
       return data;
     },
   });

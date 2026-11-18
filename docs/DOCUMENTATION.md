@@ -147,10 +147,18 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 - **Fail**: bytes discarded before any storage write, `PetDetectionLog(passed=False)`,
   `NoPetDetectedError` → HTTP 422 `{"error":{"code":"no_pet_detected","message":…,
   "detected_labels":[…]}}` so the user can retry instantly. Zero penalties.
-- Frontend UX (`PhotoUpload`): the 422 renders a friendly `no-pet-error` box ("No strikes, no
-  bans — just pick another photo") and the picker stays open for an immediate retry; a passing
-  photo shows a "Pet detected ✓" badge. E2E journey ④ drives both photos through the real
-  YOLOv8n model (`e2e/fixtures/dog.jpg` passes @ ~0.81, `landscape.jpg` → 422).
+- Frontend UX (`PhotoUpload`): a full-width, fixed-height drop rectangle supports click, keyboard,
+  and drag-and-drop selection with a clear drag-active state. During upload, the local pet preview
+  stays visible behind an animated scan line and spinner; a live region reports **Uploading photo →
+  Scanning photo → Detecting your pet → Saving securely**, with a four-step indicator and progress
+  bar. Axios supplies the real byte-upload percentage; because `POST /api/pets/photos` is one
+  synchronous request, the later labels follow its known processing pipeline rather than separate
+  server telemetry. Backend processing switches the bar to an indeterminate animated state. Reduced
+  motion disables the scan/spinner/progress animations without hiding status information.
+- The 422 renders a friendly `no-pet-error` box ("No strikes, no bans — just pick another photo")
+  and the picker stays open for an immediate retry; a passing photo shows a "Pet detected ✓" badge.
+  E2E journey ④ drives both photos through the real YOLOv8n model (`e2e/fixtures/dog.jpg` passes
+  @ ~0.81, `landscape.jpg` → 422).
 
 ## 9. Payments — Rewards (Stripe Test + GCash / QR Ph)
 
@@ -192,7 +200,9 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   another port.
 - Visual system per the `taste` skill: one type scale, one card recipe, equal edges,
   tactile hover/press, skeleton/empty/error states, dual palette (emergency crimson/amber vs
-  outreach sage/teal/terracotta).
+  outreach sage/teal/terracotta). The photo uploader uses a fixed 380px desktop rectangle (360px
+  on phones), neutral/sage drop affordances, an animated processing overlay, accessible live status
+  and progress semantics, and reduced-motion fallbacks.
 
 ## 11. Testing & Coverage
 
@@ -204,8 +214,10 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `(provider, event_id)` → single processing); 422-before-storage tests (non-pet bytes never
   reach Cloudinary); Cloudinary driver unit tests (SDK mocked, 100% on the driver);
   `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
-- Frontend: `npm run test:run` → **65 Vitest tests, 6 files** (RTL + MSW, jsdom);
-  `npm run test:coverage` → **88.5% stmts / 81.0% branches / 85.4% funcs / 89.2% lines**
+- Frontend: `npm run test:run` → **68 Vitest tests, 6 files** (RTL + MSW, jsdom), including
+  drag-and-drop, real Axios upload-progress callbacks, all four live processing labels, the animated
+  indeterminate bar, and successful completion;
+  `npm run test:coverage` → **87.96% stmts / 81.22% branches / 84.07% funcs / 89.1% lines**
   (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
   `npx tsc -b --noEmit` clean; `npm run build` green.
 - E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **6 journeys /
@@ -377,7 +389,16 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   only (`settings.py`); `FallbackCache` removed. Channels/Celery brokers unchanged.
   Suite: **97 pytest passed @ 94.0%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
   clean.
+- **Phase 13** — Photo-upload interaction redesign: replaced the small 360px-max placeholder with a
+  full-width fixed rectangle (380px, 360px on phones), editorial empty-state typography, a tactile
+  sage drag/hover treatment, and a keyboard-operable click target. Uploading now keeps the selected
+  pet visible beneath a scan-line animation, spinner, four-step status tracker, and accessible live
+  text. Axios `onUploadProgress` drives the exact upload percentage; scan/detect/save labels then
+  follow the synchronous backend pipeline with an indeterminate progress bar. Reduced-motion users
+  retain static status and progress. Added tests for drag/drop and the complete progress-stage
+  sequence. Verified at desktop and phone browser sizes; **68 Vitest tests**, coverage
+  **87.96/81.22/84.07/89.1**, `tsc -b` + `vite build`, and **7/7 Playwright journeys** green.
 
 **Final status:** backend **97 passed @ 94.0%** (100% services/drivers/vision/storage);
-frontend **66 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
+frontend **68 vitest tests** @ 87.96/81.22/84.07/89.1 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
