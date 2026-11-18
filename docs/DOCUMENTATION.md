@@ -352,6 +352,19 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   thumbnail task → succeeded. Suite: **93 pytest passed @ 94.3%**, 66 vitest, Playwright
   7/7, ruff + mypy + tsc clean.
 
-**Final status:** backend **93 passed @ 94.3%** (100% services/drivers/vision/storage);
+- **Phase 12** — A4 flyer print redesign (single page, unique per pet): both
+  `templates/flyers/emergency.html` (lost pet) and `templates/flyers/outreach.html`
+  (adoption) rebuilt for print fidelity: full-bleed A4 (210×297mm, zero margin),
+  equal 15mm side edges, bold header band, large pet photo leading (no image
+  captions), oversized pet name, detail cards, QR code + contact footer, bottom
+  strip. Each flyer gets a deterministic design variant (1–4 derived from the flyer
+  UUID) so every print looks unique — a different colored corner accent badge and a
+  unique seal number — while keeping the same clear information hierarchy.
+  `config/settings.py` / `apps/flyers/tasks.py` pass `design_variant` to the template
+  context. Verified live: both modes render exactly **1 page at A4** via WeasyPrint.
+  Suite: **97 pytest passed @ 94.0%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
+  clean.
+
+**Final status:** backend **97 passed @ 94.0%** (100% services/drivers/vision/storage);
 frontend **66 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.

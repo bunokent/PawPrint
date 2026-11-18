@@ -29,7 +29,12 @@ def render_flyer_html(flyer) -> str:  # noqa: ANN001
     template = "flyers/emergency.html" if flyer.mode == "emergency" else "flyers/outreach.html"
     target = flyer.qr_target_value or QrService.target_url(str(flyer.pk), settings.FRONTEND_BASE_URL)
     qr_svg = QrService.svg_for_url(target)
-    return render_to_string(template, {"flyer": flyer, "qr_svg": qr_svg, "pet": flyer.pet})
+    # Deterministic design variant per flyer ID so every printed flyer looks unique.
+    variant = int(flyer.pk.hex[:8], 16) % 4 + 1
+    return render_to_string(
+        template,
+        {"flyer": flyer, "qr_svg": qr_svg, "pet": flyer.pet, "design_variant": variant},
+    )
 
 
 def render_flyer_pdf(html: str) -> bytes:

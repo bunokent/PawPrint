@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>LOST PET — {{ flyer.pet.name }}</title>
 <style>
-  /* A4 @300dpi print fidelity: 210mm x 297mm, full bleed, equal side edges */
+  /* A4 @300dpi print fidelity: 210mm x 297mm, single page, full bleed */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 210mm; height: 297mm; }
@@ -12,47 +12,65 @@
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     background: #ffffff; color: #1a1410;
     display: flex; flex-direction: column;
+    overflow: hidden;
   }
   /* ---------- Header band ---------- */
   .band {
     background: #7f1d1d; color: #ffffff;
-    padding: 11mm 15mm; display: flex; justify-content: space-between; align-items: center;
+    padding: 12mm 16mm; display: flex; justify-content: space-between; align-items: center;
+    position: relative;
   }
-  .band h1 { font-size: 36pt; font-weight: 900; letter-spacing: 0.05em; line-height: 1.05; }
+  .band h1 { font-size: 38pt; font-weight: 900; letter-spacing: 0.04em; line-height: 1.05; }
   .band .sub { font-size: 13pt; font-weight: 600; opacity: 0.94; line-height: 1.35; }
   .reward {
-    background: #f59e0b; color: #451a03; font-weight: 800; font-size: 15pt;
+    background: #f59e0b; color: #451a03; font-weight: 800; font-size: 14pt;
     padding: 4mm 9mm; border-radius: 3mm; text-align: center; white-space: nowrap;
   }
+  /* Unique per-flyer corner accent badge */
+  .corner-accent {
+    position: absolute; width: 14mm; height: 14mm; border-radius: 50%; top: 8mm; right: 12mm;
+    z-index: 0; opacity: 0.55;
+  }
+  .corner-accent.v1 { background: #f59e0b; }
+  .corner-accent.v2 { background: #b45309; }
+  .corner-accent.v3 { background: #be185d; }
+  .corner-accent.v4 { background: #991b1b; }
+  .band > * { position: relative; z-index: 1; }
   /* ---------- Hero photo (no caption) ---------- */
-  .photo { padding: 10mm 15mm 5mm; text-align: center; }
+  .photo { padding: 9mm 16mm 4mm; text-align: center; }
   .photo img {
-    width: 126mm; height: 126mm; object-fit: cover; border-radius: 5mm;
+    width: 122mm; height: 122mm; object-fit: cover; border-radius: 5mm;
     border: 3mm solid #7f1d1d; box-shadow: 0 1mm 3mm rgba(0,0,0,0.18);
   }
   /* ---------- Name ---------- */
-  .name { text-align: center; font-size: 34pt; font-weight: 900; letter-spacing: 0.02em; padding: 2mm 0 1mm; text-transform: uppercase; }
-  .meta { text-align: center; font-size: 13.5pt; color: #4a3f38; padding-bottom: 5mm; }
+  .name { text-align: center; font-size: 34pt; font-weight: 900; letter-spacing: 0.02em; padding: 1mm 0 1mm; text-transform: uppercase; }
+  .meta { text-align: center; font-size: 13pt; color: #4a3f38; padding-bottom: 4mm; }
   /* ---------- Detail cards ---------- */
-  .grid { display: flex; gap: 8mm; padding: 0 15mm; }
+  .grid { display: flex; gap: 8mm; padding: 0 16mm; page-break-inside: avoid; }
   .card { flex: 1; border: 1.5pt solid #7f1d1d; border-radius: 3mm; padding: 6mm 8mm; background: #fff7f6; }
-  .card h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.09em; color: #7f1d1d; margin-bottom: 2mm; }
+  .card h2 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.09em; color: #7f1d1d; margin-bottom: 2mm; }
   .card p { font-size: 13pt; line-height: 1.55; color: #1a1410; }
   /* ---------- Footer: QR + contact ---------- */
   .footer {
     margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between;
-    padding: 7mm 15mm 10mm;
+    padding: 6mm 16mm 9mm; page-break-inside: avoid;
   }
-  .qr { width: 36mm; height: 36mm; }
+  .seal {
+    width: 11mm; height: 11mm; border: 1.2pt solid #7f1d1d; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 7pt;
+    font-weight: 900; color: #7f1d1d; margin-left: 6mm;
+  }
+  .qr { width: 34mm; height: 34mm; }
   .contact { text-align: right; }
-  .contact h2 { font-size: 13pt; color: #7f1d1d; font-weight: 800; margin-bottom: 1mm; }
-  .contact p { font-size: 13pt; line-height: 1.5; color: #1a1410; }
+  .contact h2 { font-size: 12.5pt; color: #7f1d1d; font-weight: 800; margin-bottom: 1mm; }
+  .contact p { font-size: 12.5pt; line-height: 1.5; color: #1a1410; }
   /* ---------- Bottom strip ---------- */
-  .strip { background: #1a1410; color: #ffffff; font-size: 9pt; text-align: center; padding: 3mm; letter-spacing: 0.04em; }
+  .strip { background: #1a1410; color: #ffffff; font-size: 8.5pt; text-align: center; padding: 2.5mm; letter-spacing: 0.04em; }
 </style>
 </head>
 <body>
   <div class="band">
+    <div class="corner-accent v{{ design_variant }}"></div>
     <div>
       <h1>LOST PET</h1>
       <div class="sub">Help {{ flyer.pet.name }} come home</div>
@@ -78,6 +96,7 @@
   </div>
   <div class="footer">
     <div class="qr">{{ qr_svg|safe }}</div>
+    <div class="seal">{{ design_variant }}</div>
     <div class="contact">
       <h2>SEEN {{ flyer.pet.name|upper }}? CALL</h2>
       <p>{{ flyer.contact_phone }}<br>{{ flyer.contact_email }}</p>
