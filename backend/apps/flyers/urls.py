@@ -10,8 +10,8 @@ from .views import (
 
 urlpatterns = [
     path("", FlyerListView.as_view(), name="flyer-list"),
-    path("/mine", MyFlyersView.as_view(), name="flyer-mine"),
-    path("/new", FlyerCreateView.as_view(), name="flyer-create"),
-    path("/<uuid:pk>", FlyerDetailView.as_view(), name="flyer-detail"),
-    path("/<uuid:pk>/edit", FlyerDetailMutateView.as_view(), name="flyer-mutate"),
+    path("mine", MyFlyersView.as_view(), name="flyer-mine"),
+    path("new", FlyerCreateView.as_view(), name="flyer-create"),
+    path("<uuid:pk>", FlyerDetailView.as_view(), name="flyer-detail"),
+    path("<uuid:pk>/edit", FlyerDetailMutateView.as_view(), name="flyer-mutate"),
 ]
