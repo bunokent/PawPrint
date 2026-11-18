@@ -2,51 +2,60 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>ADOPTION — {{ flyer.pet.name }}</title>
+<title>ADOPT {{ flyer.pet.name }}</title>
 <style>
-  /* A4 @300dpi print fidelity: 210mm x 297mm — warm outreach palette (sage/teal/terracotta) */
+  /* A4 @300dpi print fidelity: 210mm x 297mm, full bleed, equal side edges */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 210mm; height: 297mm; }
   body {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    background: #f6f1e7; color: #26332b;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    background: #ffffff; color: #25312a;
     display: flex; flex-direction: column;
   }
+  /* ---------- Header band ---------- */
   .band {
-    background: #2f6f5e; color: #f6f1e7;
-    padding: 10mm 14mm; display: flex; justify-content: space-between; align-items: center;
+    background: #2f6f5e; color: #ffffff;
+    padding: 11mm 15mm; display: flex; justify-content: space-between; align-items: center;
   }
-  .band h1 { font-size: 32pt; font-weight: 800; letter-spacing: 0.04em; }
-  .band .sub { font-size: 12pt; opacity: 0.92; }
-  .tag {
-    background: #c96f4a; color: #fff; font-weight: 700; font-size: 12pt;
-    padding: 3mm 7mm; border-radius: 20mm;
+  .band h1 { font-size: 36pt; font-weight: 900; letter-spacing: 0.04em; line-height: 1.05; }
+  .band .sub { font-size: 13pt; font-weight: 600; opacity: 0.94; line-height: 1.35; }
+  .tag { background: #c96f4a; color: #ffffff; font-weight: 800; font-size: 13pt;
+    padding: 3.5mm 9mm; border-radius: 22mm; text-align: center; white-space: nowrap; }
+  /* ---------- Hero photo (no caption) ---------- */
+  .photo { padding: 10mm 15mm 5mm; text-align: center; }
+  .photo img {
+    width: 126mm; height: 126mm; object-fit: cover; border-radius: 63mm;
+    border: 3mm solid #2f6f5e; box-shadow: 0 1mm 3mm rgba(0,0,0,0.18);
   }
-  .photo { padding: 10mm 14mm 4mm; text-align: center; }
-  .photo img { width: 118mm; height: 118mm; object-fit: cover; border-radius: 60mm; border: 2.5mm solid #2f6f5e; }
-  .name { text-align: center; font-size: 30pt; font-weight: 800; padding: 3mm 0 1mm; }
-  .meta { text-align: center; font-size: 13pt; color: #5c6b60; padding-bottom: 6mm; }
-  .chips { display: flex; justify-content: center; gap: 3mm; padding-bottom: 6mm; flex-wrap: wrap; }
-  .chip { background: #e3dcc8; color: #26332b; border-radius: 20mm; padding: 1.5mm 5mm; font-size: 11pt; font-weight: 600; }
-  .card {
-    margin: 0 14mm; border: 1.5pt solid #2f6f5e; border-radius: 3mm; padding: 6mm 8mm; background: #fffdf8;
+  /* ---------- Name ---------- */
+  .name { text-align: center; font-size: 34pt; font-weight: 900; letter-spacing: 0.02em; padding: 2mm 0 1mm; text-transform: uppercase; }
+  .meta { text-align: center; font-size: 13.5pt; color: #5c6b60; padding-bottom: 4mm; }
+  /* ---------- Chips ---------- */
+  .chips { display: flex; justify-content: center; gap: 3mm; padding-bottom: 5mm; flex-wrap: wrap; }
+  .chip { background: #e9e2d0; color: #25312a; border-radius: 22mm; padding: 1.5mm 6mm; font-size: 11pt; font-weight: 700; }
+  /* ---------- About card ---------- */
+  .card { margin: 0 15mm; border: 1.5pt solid #2f6f5e; border-radius: 3mm; padding: 7mm 9mm; background: #fbfaf5; }
+  .card h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.09em; color: #2f6f5e; margin-bottom: 2mm; }
+  .card p { font-size: 13pt; line-height: 1.55; color: #25312a; }
+  /* ---------- Footer: QR + contact ---------- */
+  .footer {
+    margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between;
+    padding: 7mm 15mm 10mm;
   }
-  .card h2 { font-size: 11pt; text-transform: uppercase; letter-spacing: 0.08em; color: #2f6f5e; margin-bottom: 2mm; }
-  .card p { font-size: 12.5pt; line-height: 1.5; }
-  .footer { margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between; padding: 8mm 14mm 12mm; }
-  .qr { width: 34mm; height: 34mm; }
+  .qr { width: 36mm; height: 36mm; }
   .contact { text-align: right; }
-  .contact h2 { font-size: 13pt; color: #c96f4a; font-weight: 800; }
-  .contact p { font-size: 13pt; line-height: 1.5; }
-  .strip { background: #26332b; color: #f6f1e7; font-size: 9.5pt; text-align: center; padding: 3mm; }
+  .contact h2 { font-size: 13pt; color: #c96f4a; font-weight: 800; margin-bottom: 1mm; }
+  .contact p { font-size: 13pt; line-height: 1.5; color: #25312a; }
+  /* ---------- Bottom strip ---------- */
+  .strip { background: #25312a; color: #ffffff; font-size: 9pt; text-align: center; padding: 3mm; letter-spacing: 0.04em; }
 </style>
 </head>
 <body>
   <div class="band">
     <div>
       <h1>ADOPTABLE</h1>
-      <div class="sub">Meet {{ flyer.pet.name }} — looking for a forever home</div>
+      <div class="sub">Meet {{ flyer.pet.name }} — a forever home awaits</div>
     </div>
     <div class="tag">ADOPT ME</div>
   </div>
@@ -66,7 +75,7 @@
   <div class="footer">
     <div class="qr">{{ qr_svg|safe }}</div>
     <div class="contact">
-      <h2>WANT TO MEET {{ flyer.pet.name|upper }}?</h2>
+      <h2>MEET {{ flyer.pet.name|upper }}?</h2>
       <p>{{ flyer.contact_phone }}<br>{{ flyer.contact_email }}</p>
     </div>
   </div>
