@@ -56,13 +56,6 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
               Checking the photo for a pet…
             </p>
           </div>
-        ) : uploaded && src && !imageFailed ? (
-          <img
-            src={src}
-            alt="Uploaded pet preview"
-            onError={() => setImageFailed(true)}
-            style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
-          />
         ) : uploaded && imageFailed ? (
           <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
             <span style={{ color: "var(--color-muted)", fontSize: 14 }}>Could not load photo</span>
@@ -70,6 +63,13 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
               Pick another photo below
             </p>
           </div>
+        ) : uploaded && src ? (
+          <img
+            src={src}
+            alt="Uploaded pet preview"
+            onError={() => setImageFailed(true)}
+            style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
+          />
         ) : (
           <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)" }}>
             No photo uploaded yet
