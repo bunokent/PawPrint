@@ -17,10 +17,12 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPetPhoto();
   const [error, setError] = useState<ApiError | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const pick = (file: File | undefined) => {
     if (!file) return;
     setError(null);
+    setImageFailed(false);
     upload.mutate(file, {
       onSuccess: (result) => onUploaded(result),
       onError: (e) => setError(e instanceof ApiError ? e : new ApiError(e as never)),
@@ -28,6 +30,8 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
   };
 
   const noPet = error?.status === 422 && error.code === "no_pet_detected";
+  const hasImage = uploaded && !imageFailed;
+  const src = uploaded?.thumb_url || uploaded?.url;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -43,13 +47,18 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         }}
       />
 
-      {uploaded && !upload.isPending && (
+      {hasImage && src ? (
         <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360 }}>
           <img
-            src={uploaded.thumb_url || uploaded.url}
+            src={src}
             alt="Uploaded pet preview"
+            onError={() => setImageFailed(true)}
             style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
           />
+        </div>
+      ) : (
+        <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", height: "270px" }}>
+          No photo uploaded yet
         </div>
       )}
 
@@ -71,7 +80,7 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         >
           {upload.isPending ? "Checking…" : uploaded ? "Choose a different photo" : "Choose a photo"}
         </Button>
-        {uploaded && <span className="badge badge--outreach">Pet detected ✓</span>}
+        {uploaded && !imageFailed && <span className="badge badge--outreach">Pet detected ✓</span>}
       </div>
 
       {noPet && (
