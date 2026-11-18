@@ -17,10 +17,12 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPetPhoto();
   const [error, setError] = useState<ApiError | null>(null);
+  const [imageFailed, setImageFailed] = useState(false);
 
   const pick = (file: File | undefined) => {
     if (!file) return;
     setError(null);
+    setImageFailed(false);
     upload.mutate(file, {
       onSuccess: (result) => onUploaded(result),
       onError: (e) => setError(e instanceof ApiError ? e : new ApiError(e as never)),
@@ -44,34 +46,36 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         }}
       />
 
-      {uploaded ? (
-        <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360 }}>
-          {src ? (
-            <img
-              src={src}
-              alt="Uploaded pet preview"
-              style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
-            />
-          ) : (
-            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)" }}>
-              Could not load photo
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", height: "270px" }}>
-          No photo uploaded yet
-        </div>
-      )}
-
-      {upload.isPending && (
-        <div style={{ maxWidth: 360 }}>
-          <Skeleton style={{ aspectRatio: "4 / 3", borderRadius: 20 }} />
-          <p className="t-small" style={{ color: "var(--color-muted)", marginTop: 8 }}>
-            Checking the photo for a pet…
-          </p>
-        </div>
-      )}
+      {/* Single photo display area — one state at a time */}
+      <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360 }}>
+        {upload.isPending ? (
+          // Uploading — show skeleton inside the frame, not "No photo uploaded yet"
+          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <Skeleton style={{ aspectRatio: "4 / 3", borderRadius: 20 }} />
+            <p className="t-small" style={{ color: "var(--color-muted)", margin: 0 }}>
+              Checking the photo for a pet…
+            </p>
+          </div>
+        ) : uploaded && src && !imageFailed ? (
+          <img
+            src={src}
+            alt="Uploaded pet preview"
+            onError={() => setImageFailed(true)}
+            style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
+          />
+        ) : uploaded && imageFailed ? (
+          <div style={{ width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <span style={{ color: "var(--color-muted)", fontSize: 14 }}>Could not load photo</span>
+            <p className="t-small" style={{ color: "var(--color-muted)", margin: 0 }}>
+              Pick another photo below
+            </p>
+          </div>
+        ) : (
+          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)" }}>
+            No photo uploaded yet
+          </div>
+        )}
+      </div>
 
       <div className="btn-row">
         <Button
@@ -82,7 +86,7 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         >
           {upload.isPending ? "Checking…" : uploaded ? "Choose a different photo" : "Choose a photo"}
         </Button>
-        {uploaded && <span className="badge badge--outreach">Pet detected ✓</span>}
+        {uploaded && !imageFailed && <span className="badge badge--outreach">Pet detected ✓</span>}
       </div>
 
       {noPet && (
