@@ -30,7 +30,6 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
   };
 
   const noPet = error?.status === 422 && error.code === "no_pet_detected";
-  const hasImage = uploaded && !imageFailed;
   const src = uploaded?.thumb_url || uploaded?.url;
 
   return (
@@ -47,14 +46,20 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         }}
       />
 
-      {hasImage && src ? (
+      {uploaded ? (
         <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360 }}>
-          <img
-            src={src}
-            alt="Uploaded pet preview"
-            onError={() => setImageFailed(true)}
-            style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
-          />
+          {src && !imageFailed ? (
+            <img
+              src={src}
+              alt="Uploaded pet preview"
+              onError={() => setImageFailed(true)}
+              style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
+            />
+          ) : (
+            <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)" }}>
+              Could not load photo
+            </div>
+          )}
         </div>
       ) : (
         <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--color-muted)", height: "270px" }}>
