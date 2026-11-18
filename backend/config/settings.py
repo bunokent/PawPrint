@@ -10,7 +10,14 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Host-side convenience: `python manage.py ...` picks up the root .env automatically.
+# Inside docker compose the real env vars are already set, and load_dotenv does not
+# override existing variables, so the compose values always win there.
+load_dotenv(BASE_DIR.parent / ".env")
 
 TESTING = "pytest" in sys.modules or os.environ.get("PAWPRINT_TESTING") == "1"
 
@@ -28,6 +35,8 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # needed for SearchVectorField / GinIndex / SearchQuery on pets.Pet + flyers
+    "django.contrib.postgres",
     # allauth (email + Google/Gmail OAuth 2.0)
     "allauth",
     "allauth.account",

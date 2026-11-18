@@ -15,6 +15,7 @@ dependencies = [
     "django-allauth[socialaccount]>=65.0",
     "django-cors-headers>=4.6",
     "cloudinary>=1.41",
+    "python-dotenv>=1.0",
     "Pillow>=11.0",
     "qrcode[pil]>=8.0",
     "stripe>=11.0",
@@ -71,3 +72,13 @@ ignore_missing_imports = true
 
 [tool.django-stubs]
 django_settings_module = "config.settings"
+
+# --- CPU-only PyTorch source overrides to bypass massive CUDA GPU downloads ---
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true

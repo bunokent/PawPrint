@@ -1,3 +1,14 @@
+# web/celery pin the in-network DB/Redis values explicitly, so a host-oriented
+# .env (e.g. POSTGRES_HOST=127.0.0.1 for local `manage.py` runs) can never break them.
+x-app-environment: &app-environment
+  environment:
+    POSTGRES_HOST: postgres
+    POSTGRES_PORT: "5432"
+    POSTGRES_DB: pawprint
+    POSTGRES_USER: pawprint
+    POSTGRES_PASSWORD: pawprint
+    REDIS_URL: redis://redis:6379/0
+
 services:
   postgres:
     image: postgres:16
@@ -6,7 +17,7 @@ services:
       POSTGRES_USER: pawprint
       POSTGRES_PASSWORD: pawprint
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -35,6 +46,7 @@ services:
     build: ./backend
     command: celery -A config worker -Q flyers,webhooks,images,default -l info
     env_file: .env
+    <<: *app-environment
     depends_on:
       - postgres
       - redis
@@ -45,6 +57,7 @@ services:
     build: ./backend
     command: python manage.py runserver 0.0.0.0:8000
     env_file: .env
+    <<: *app-environment
     ports:
       - "8000:8000"
     depends_on:

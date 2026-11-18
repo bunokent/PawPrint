@@ -36,9 +36,12 @@ Playwright E2E covers the 6 critical journeys end-to-end.
 - **Exports**: WeasyPrint A4@300dpi PNG/PDF flyers + Pillow thumbnails; Playwright for
   browser-side exports.
 - **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `mailpit` (storage is
-  Cloudinary, so no MinIO service). For tests and Playwright E2E, `PAWPRINT_TESTING=1` (or
-  running under pytest) switches to locmem cache, in-memory channel layer, eager Celery,
-  `memory://` broker and filesystem storage — no Redis/Cloudinary needed.
+  Cloudinary, so no MinIO service). Host-side `python manage.py ...` auto-loads the root
+  `.env` via python-dotenv (compose sets real env vars, which always win inside containers;
+  web/celery additionally pin the in-network `postgres:5432` via `environment:`). For tests
+  and Playwright E2E, `PAWPRINT_TESTING=1` (or running under pytest) switches to locmem
+  cache, in-memory channel layer, eager Celery, `memory://` broker and filesystem storage —
+  no Redis/Cloudinary needed.
 
 ## 3. Access Model (Guest vs Registered — STRICT 2 Modes)
 
@@ -194,7 +197,8 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 ## 11. Testing & Coverage
 
 - Backend: `cd backend && .venv/bin/python -m pytest tests/ -q --cov=apps --cov-fail-under=80`
-  → **79 passed, 94.0% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`);
+  → **90 passed, 94.2% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`,
+  the Cloudinary storage driver);
   `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
   `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
   `(provider, event_id)` → single processing); 422-before-storage tests (non-pet bytes never
@@ -310,7 +314,19 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET`) in `.env`; `PAWPRINT_TESTING=1` still uses
   filesystem storage. 11 new driver unit tests (SDK mocked) → driver at **100%**; suite:
   **90 passed @ 94.2%**, ruff + mypy clean. (The "p variable is not set" compose warnings were
-  the removed MinIO env vars.)
+  an unquoted `$` in `DJANGO_SECRET_KEY` inside `.env`, fixed by regenerating the key as hex.)
+- **Phase 9** — `manage.py` hardening: (1) added `django.contrib.postgres` to
+  `INSTALLED_APPS` — `pets.Pet` uses `SearchVectorField`/`GinIndex`, and without the app every
+  `manage.py` command aborted with `postgres.E005` (pytest never caught it because
+  pytest-django skips system checks); (2) settings now `load_dotenv(root .env)`
+  (python-dotenv), so host-side `cd backend && python manage.py migrate` just works —
+  compose containers are unaffected (real env vars win; web/celery also pin
+  `POSTGRES_HOST=postgres`/`PORT=5432` via a compose `environment:` anchor, so a
+  host-oriented `.env` can't break them); (3) Playwright backend server env pins
+  `postgres`/`postgres` @ `127.0.0.1:5433` + `whsec_dev` webhook secrets so E2E stays
+  self-contained. Verified: `manage.py check` → 0 errors (only the intentional urls.W002
+  warnings), `migrate` + `seed_demo` exit 0, **90 pytest passed @ 94.2%**, ruff + mypy
+  clean, **Playwright 7/7 green**.
 
 **Final status:** backend **90 passed @ 94.2%** (100% services/drivers/vision/storage);
 frontend **65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
