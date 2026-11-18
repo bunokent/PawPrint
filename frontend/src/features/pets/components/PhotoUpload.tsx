@@ -40,7 +40,7 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
 
     // Pass localUrl to ensure persistence across navigation
     upload.mutate(file, {
-      onSuccess: (result) => onUploaded({ ...result, localUrl: localUrl }),
+      onSuccess: (result) => onUploaded({ ...(result as LocalPhotoUploadResult), localUrl: localUrl as string }),
       onError: (e) => setError(e instanceof ApiError ? e : new ApiError(e as never)),
     });
   };
@@ -111,7 +111,7 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
           />
         ) : (
           // No photo uploaded yet - Drag and drop zone
-            <div
+              <div
             style={{ 
               width: "100%", 
               height: "100%", 
@@ -119,19 +119,18 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
               alignItems: "center", 
               justifyContent: "center", 
               color: "var(--color-muted)",
-              border: "2px dashed var(--color-line)",
+              border: "3px dashed var(--color-line)", /* Increased border thickness for prominence */
               borderRadius: 20,
               transition: "border-color 0.2s ease-in-out",
               cursor: "pointer",
               // Add dynamic border glow/highlight on drag
-              // Note: True CSS glow/highlight requires CSS classes or complex JS interaction, 
-              // but I'll update styles for better visual cue.
+              // onDragEnter/onDragLeave logic is better handled by CSS classes if available, but keeping JS for now.
             }}
             onDragOver={handleDragOver}
             onDrop={handleDrop}
-            // Optional: add visual feedback when dragging over
-            // onDragEnter={(e) => e.currentTarget.style.borderColor = 'blue'}
-            // onDragLeave={(e) => e.currentTarget.style.borderColor = 'var(--color-line)'}
+            // onDragEnter/onDragLeave handlers were present in previous version but omitted in current read, restoring them for visual feedback
+            onDragEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-accent)'}
+            onDragLeave={(e) => e.currentTarget.style.borderColor = 'var(--color-line)'}
           >
             Drag & drop a photo here or click to choose
           </div>
