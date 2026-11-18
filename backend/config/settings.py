@@ -188,7 +188,7 @@ if TESTING:
 else:
     CACHES = {
         "default": {
-            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "BACKEND": "apps.common.cache_backend.FallbackCache",
             "LOCATION": REDIS_URL,
         }
     }
