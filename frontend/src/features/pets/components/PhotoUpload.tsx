@@ -17,12 +17,10 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const upload = useUploadPetPhoto();
   const [error, setError] = useState<ApiError | null>(null);
-  const [imageFailed, setImageFailed] = useState(false);
 
   const pick = (file: File | undefined) => {
     if (!file) return;
     setError(null);
-    setImageFailed(false);
     upload.mutate(file, {
       onSuccess: (result) => onUploaded(result),
       onError: (e) => setError(e instanceof ApiError ? e : new ApiError(e as never)),
@@ -48,11 +46,10 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
 
       {uploaded ? (
         <div className="photo-frame" style={{ borderRadius: 20, border: "1px solid var(--color-line)", maxWidth: 360 }}>
-          {src && !imageFailed ? (
+          {src ? (
             <img
               src={src}
               alt="Uploaded pet preview"
-              onError={() => setImageFailed(true)}
               style={{ width: "100%", aspectRatio: "4 / 3", objectFit: "cover", display: "block" }}
             />
           ) : (
@@ -85,7 +82,7 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         >
           {upload.isPending ? "Checking…" : uploaded ? "Choose a different photo" : "Choose a photo"}
         </Button>
-        {uploaded && !imageFailed && <span className="badge badge--outreach">Pet detected ✓</span>}
+        {uploaded && <span className="badge badge--outreach">Pet detected ✓</span>}
       </div>
 
       {noPet && (
