@@ -10,14 +10,18 @@ import os
 import sys
 from pathlib import Path
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:  # pragma: no cover — image built before python-dotenv was a dep
+    load_dotenv = None  # type: ignore[assignment]
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Host-side convenience: `python manage.py ...` picks up the root .env automatically.
 # Inside docker compose the real env vars are already set, and load_dotenv does not
 # override existing variables, so the compose values always win there.
-load_dotenv(BASE_DIR.parent / ".env")
+if load_dotenv is not None:
+    load_dotenv(BASE_DIR.parent / ".env")
 
 TESTING = "pytest" in sys.modules or os.environ.get("PAWPRINT_TESTING") == "1"
 

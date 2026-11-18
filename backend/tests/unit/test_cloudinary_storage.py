@@ -13,7 +13,12 @@ import pytest
 from django.core.files.base import ContentFile
 
 from apps.common import storage as storage_helpers
-from apps.common.cloudinary_storage import CloudinaryStorage, configure_cloudinary, resource_type_for
+from apps.common.cloudinary_storage import (
+    CloudinaryStorage,
+    configure_cloudinary,
+    format_for,
+    resource_type_for,
+)
 
 
 @pytest.fixture
@@ -55,6 +60,13 @@ def test_resource_type_for():
     assert resource_type_for("flyers/1/flyer.pdf", "application/pdf") == "image"
     assert resource_type_for("a.png") == "image"
     assert resource_type_for("notes.txt", "text/plain") == "raw"
+
+
+def test_format_for():
+    assert format_for("pets/photos/x.jpg") == "jpg"
+    assert format_for("flyers/1/flyer.pdf") == "pdf"
+    assert format_for("a.PNG") == "png"
+    assert format_for("notes") is None
 
 
 def test_configure_uses_cloudinary_url(settings, fake_sdk):
@@ -106,6 +118,7 @@ def test_url_signs_and_expires(settings, fake_sdk):
     assert call["sign_url"] is True
     assert call["type"] == "private"
     assert call["resource_type"] == "image"
+    assert call["format"] == "pdf"
     assert before + 3600 <= call["expires_at"] <= after + 3600
 
 

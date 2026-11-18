@@ -23,6 +23,13 @@ _IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif", "applicati
 _IMAGE_EXTS = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".pdf")
 
 
+def format_for(name: str) -> str | None:
+    """Cloudinary delivery format derived from the name's extension (jpg, png, pdf, …)."""
+    if "." in name:
+        return name.rsplit(".", 1)[-1].lower()
+    return None
+
+
 def configure_cloudinary() -> None:
     """Configure the SDK from settings (CLOUDINARY_URL or the discrete vars)."""
     if settings.CLOUDINARY_URL:
@@ -86,6 +93,9 @@ class CloudinaryStorage(Storage):
             "type": "private",
             "sign_url": True,
         }
+        fmt = format_for(name)
+        if fmt:
+            kwargs["format"] = fmt  # without it, cloudinary_url drops the extension segment and the signed URL 404s
         if expire:
             kwargs["expires_at"] = int(time.time()) + expire
         # cloudinary>=1.47 returns (url, options); older versions returned a bare string.

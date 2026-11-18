@@ -348,10 +348,10 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   verbatim in backend tests, and the frontend asserts it renders exactly once); (4) the
   axios client never shows raw "Request failed with status code 500" anymore — non-JSON
   errors fall back to "Something went wrong. Please try again.". Verified live against real
-  Cloudinary creds: pet photo → 201 with a signed private URL; non-pet → 422, single
-  message. Suite: **92 pytest passed @ 94.3%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
-  clean.
+  Cloudinary creds: pet photo → 201 signed URL; non-pet → 422 single message; celery
+  thumbnail task → succeeded. Suite: **93 pytest passed @ 94.3%**, 66 vitest, Playwright
+  7/7, ruff + mypy + tsc clean.
 
-**Final status:** backend **92 passed @ 94.3%** (100% services/drivers/vision/storage);
+**Final status:** backend **93 passed @ 94.3%** (100% services/drivers/vision/storage);
 frontend **66 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
