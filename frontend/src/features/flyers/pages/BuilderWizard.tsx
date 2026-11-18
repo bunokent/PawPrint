@@ -15,6 +15,22 @@ import { FlyerCard } from "@/components/FlyerCard";
 
 const SPECIES = ["dog", "cat", "bird", "horse", "other"] as const;
 
+// Map YOLO-detected class labels to our species values. YOLO pet classes (COCO ids 14-19):
+// bird, cat, dog, horse, sheep, cow → map sheep/cow to "other".
+type Species = (typeof SPECIES)[number];
+function detectedSpecies(detectedClasses: string[]): Species | null {
+  const label = detectedClasses[0]?.toLowerCase() ?? "";
+  const map: Record<string, Species> = {
+    dog: "dog",
+    cat: "cat",
+    bird: "bird",
+    horse: "horse",
+    sheep: "other",
+    cow: "other",
+  };
+  return map[label] ?? null;
+}
+
 const petSchema = z.object({
   name: z.string().min(1, "Give the pet a name.").max(120),
   species: z.enum(SPECIES),
@@ -146,8 +162,8 @@ export function BuilderWizard() {
             }}
           />
         )}
-        {step === 1 && photo && <StepPet photo={photo} mode={mode} onDone={(p) => { setPet(p); setStep(2); }} />}
-        {step === 2 && photo && pet && user && <StepFlyer pet={pet} photo={photo} mode={mode} userEmail={user.email} />}
+        {step === 1 && photo && <StepPet photo={photo} mode={mode} onDone={(p) => { setPet(p); setStep(2); }} onBack={() => setStep(0)} />}
+        {step === 2 && photo && pet && user && <StepFlyer pet={pet} photo={photo} mode={mode} userEmail={user.email} onBack={() => setStep(1)} />}
       </div>
     </section>
   );
@@ -203,21 +219,32 @@ function StepPet({
   photo,
   mode,
   onDone,
+  onBack,
 }: {
   photo: PhotoUploadResult;
   mode: Mode;
   onDone: (pet: Pet) => void;
+  onBack: () => void;
 }) {
   const createPet = useCreatePet();
   const form = useForm<PetValues>({
     resolver: zodResolver(petSchema),
-    defaultValues: { name: "", species: "dog", breed: "", color: "", age: "", temperament_tags: "" },
+    defaultValues: {
+      name: "",
+      species: detectedSpecies(photo.detected_classes) ?? "dog",
+      breed: "",
+      color: "",
+      age: "",
+      temperament_tags: "",
+    },
   });
+  const autoSpecies = detectedSpecies(photo.detected_classes);
+  const speciesDisabled = Boolean(autoSpecies);
   const [state, submit, pending] = useActionState(async (_prev: StepState, values: PetValues): Promise<StepState> => {
     try {
       const pet = await createPet.mutateAsync({
         name: values.name.trim(),
-        species: values.species,
+        species: (speciesDisabled ? autoSpecies : values.species) as Species,
         breed: values.breed || undefined,
         color: values.color || undefined,
         age: values.age ? Number(values.age) : null,
@@ -234,19 +261,30 @@ function StepPet({
 
   return (
     <div className="card" style={{ padding: 28 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span className="t-label" style={{ color: "var(--color-muted)" }}>Tell us about the pet</span>
+        <Button type="button" variant="secondary" onClick={onBack}>
+          ← Back
+        </Button>
+      </div>
       <form onSubmit={form.handleSubmit((v) => startTransition(() => submit(v)))} style={{ display: "flex", flexDirection: "column", gap: 16 }} noValidate>
         <FieldShell label="Pet name" htmlFor="pet-name" error={form.formState.errors.name?.message}>
           <Input id="pet-name" autoComplete="off" aria-invalid={Boolean(form.formState.errors.name)} {...form.register("name")} />
         </FieldShell>
         <div className="split-2" style={{ gap: 16 }}>
           <FieldShell label="Species" htmlFor="pet-species" error={form.formState.errors.species?.message}>
-            <select id="pet-species" className="select" {...form.register("species")}>
+            <select id="pet-species" className="select" {...form.register("species")} disabled={speciesDisabled}>
               {SPECIES.map((s) => (
-                <option key={s} value={s}>
-                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                <option key={s} value={s} disabled={speciesDisabled && s !== autoSpecies}>
+                  {speciesDisabled && s === autoSpecies ? `Auto-detected: ${s.charAt(0).toUpperCase() + s.slice(1)}` : s.charAt(0).toUpperCase() + s.slice(1)}
                 </option>
               ))}
             </select>
+            {speciesDisabled && (
+              <p className="t-small" style={{ color: "var(--color-muted)", marginTop: 4 }}>
+                Species auto-detected from the photo ({autoSpecies}). Change the photo to re-detect.
+              </p>
+            )}
           </FieldShell>
           <FieldShell label="Age (years)" htmlFor="pet-age" error={form.formState.errors.age?.message}>
             <Input id="pet-age" inputMode="numeric" aria-invalid={Boolean(form.formState.errors.age)} {...form.register("age")} />
@@ -284,11 +322,13 @@ function StepFlyer({
   photo,
   mode,
   userEmail,
+  onBack,
 }: {
   pet: Pet;
   photo: PhotoUploadResult;
   mode: Mode;
   userEmail: string;
+  onBack: () => void;
 }) {
   const navigate = useNavigate();
   const createFlyer = useCreateFlyer();
@@ -344,6 +384,12 @@ function StepFlyer({
 
   return (
     <div className="card" style={{ padding: 28 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+        <span className="t-label" style={{ color: "var(--color-muted)" }}>Flyer details &amp; reward</span>
+        <Button type="button" variant="secondary" onClick={onBack}>
+          ← Back
+        </Button>
+      </div>
       <form onSubmit={form.handleSubmit((v) => startTransition(() => submit(v)))} style={{ display: "flex", flexDirection: "column", gap: 16 }} noValidate>
         {mode === "emergency" && (
           <>

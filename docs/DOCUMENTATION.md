@@ -366,6 +366,15 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   (`apps/flyers/services.py`), so they appear in the lost/adoption public gallery
   right away instead of being hidden while assets generate. QR target is set after
   the flyer id exists. Assets (PDF/PNG) still generate in the background via Celery.
+- **Frontend flyer-build UX**:
+  - QR code renders beside the pet photo on the flyer detail card; a "Show QR code"
+    / "Hide QR code" button toggles it when there is no space (`FlyerDetailPage.tsx`).
+  - Photo detection auto-selects and disables the species field (dog/cat/bird/horse
+    → other) from the YOLOv8 detected classes; confidence threshold raised to 0.60
+    for efficiency (`PetUpload` / `StepPet`).
+  - Back button on steps 2 and 3 of the flyer builder wizard (`BuilderWizard.tsx`).
+- **Cache**: Redis removed as a cache backend — `CACHES` uses in-memory `LocMemCache`
+  only (`settings.py`); `FallbackCache` removed. Channels/Celery brokers unchanged.
   Suite: **97 pytest passed @ 94.0%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
   clean.
 

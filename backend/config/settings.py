@@ -178,20 +178,15 @@ CSRF_COOKIE_SAMESITE = "Lax"
 # Cache / channels / celery
 # ---------------------------------------------------------------------------
 REDIS_URL = os.environ.get("REDIS_URL", "redis://127.0.0.1:6379/0")
+# In-memory cache only — no Redis caching (project is small, single-instance).
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
 if TESTING:
-    CACHES = {"default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"}}
     channel_layers: dict = {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
     CELERY_TASK_ALWAYS_EAGER = True
     CELERY_TASK_EAGER_PROPAGATES = False
     CELERY_BROKER_URL = "memory://"
     CELERY_RESULT_BACKEND = "cache+memory://"
 else:
-    CACHES = {
-        "default": {
-            "BACKEND": "apps.common.cache_backend.FallbackCache",
-            "LOCATION": REDIS_URL,
-        }
-    }
     channel_layers = {
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
@@ -249,7 +244,7 @@ FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173")
 # AI vision gatekeeper
 # ---------------------------------------------------------------------------
 YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", "yolov8n.pt")
-YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.45"))
+YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.60"))
 # COCO class ids treated as pets/animals.
 YOLO_PET_CLASS_IDS = {14, 15, 16, 17, 18, 19}
 

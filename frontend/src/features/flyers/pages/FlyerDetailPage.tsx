@@ -124,26 +124,28 @@ export function FlyerDetailPage() {
         {/* Print sheet — A4 at 300dpi via @media print (.print-sheet) */}
         <article className="card print-sheet" style={{ padding: 32 }} data-testid="flyer-sheet">
           <div className="split-2">
-            <div>
-              <div className="photo-frame" style={{ aspectRatio: "4 / 3", borderRadius: 20, background: "var(--color-surface)", border: "1px solid var(--color-line)" }}>
-                {flyer.photo_url ? (
-                  <img
-                    src={flyer.photo_url}
-                    alt={`${flyer.pet.name} — ${emergency ? "lost pet" : "adoptable pet"} photo`}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: "var(--color-muted)" }}>
-                    No photo yet
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+                <div className="photo-frame" style={{ aspectRatio: "4 / 3", borderRadius: 20, background: "var(--color-surface)", border: "1px solid var(--color-line)", flex: 1 }}>
+                  {flyer.photo_url ? (
+                    <img
+                      src={flyer.photo_url}
+                      alt={`${flyer.pet.name} — ${emergency ? "lost pet" : "adoptable pet"} photo`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", color: "var(--color-muted)" }}>
+                      No photo yet
+                    </div>
+                  )}
+                </div>
+                {qrTarget && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 150 }}>
+                    <QrImage value={qrTarget} size={150} alt={`QR code linking to ${flyer.pet.name}'s flyer`} />
+                    <p className="t-label" style={{ marginTop: 2, textAlign: "center" }}>Scan to open this flyer</p>
                   </div>
                 )}
               </div>
-              {qrTarget && (
-                <div style={{ marginTop: 20, textAlign: "center" }}>
-                  <QrImage value={qrTarget} size={180} alt={`QR code linking to ${flyer.pet.name}'s flyer`} />
-                  <p className="t-label" style={{ marginTop: 4 }}>Scan to open this flyer</p>
-                </div>
-              )}
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
