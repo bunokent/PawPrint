@@ -338,7 +338,20 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `redirect_uri = <origin>/auth/login`, so register exactly `http://localhost:5173/auth/login`
   (and the `127.0.0.1` variant) as an Authorized redirect URI of the OAuth client in
   Google Cloud Console. Health route is `/api/health` (bare `/health` is a 404).
+- **Phase 11** — Upload hardening (no offline fallback; Cloudinary only): (1) Cloudinary
+  SDK ≥1.47 `cloudinary_url()` returns a `(url, options)` tuple — the storage driver now
+  unpacks it (it was returning a stringified tuple in API responses; fixed + regression
+  tested with both return shapes, driver still 100%); (2) storage failures (e.g. wrong
+  `CLOUDINARY_URL`) now return a JSON **502 `storage_unavailable`** envelope instead of an
+  HTML 500 page (`apps/common/exceptions.py`); (3) the 422 `no_pet_detected` message is
+  exactly "No pet detected in the photo. Please upload a clear photo of your pet." (asserted
+  verbatim in backend tests, and the frontend asserts it renders exactly once); (4) the
+  axios client never shows raw "Request failed with status code 500" anymore — non-JSON
+  errors fall back to "Something went wrong. Please try again.". Verified live against real
+  Cloudinary creds: pet photo → 201 with a signed private URL; non-pet → 422, single
+  message. Suite: **92 pytest passed @ 94.3%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
+  clean.
 
-**Final status:** backend **90 passed @ 94.2%** (100% services/drivers/vision/storage);
-frontend **65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
+**Final status:** backend **92 passed @ 94.3%** (100% services/drivers/vision/storage);
+frontend **66 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.

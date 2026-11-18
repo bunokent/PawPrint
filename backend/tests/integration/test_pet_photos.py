@@ -59,13 +59,35 @@ def test_upload_non_pet_photo_422(auth_client, monkeypatch):
     assert resp.status_code == 422
     body = resp.json()
     assert body["error"]["code"] == "no_pet_detected"
-    assert "No pet detected" in body["error"]["message"]
+    # The message is exactly this sentence — shown once, not duplicated.
+    assert body["error"]["message"] == "No pet detected in the photo. Please upload a clear photo of your pet."
     assert body["error"]["detected_labels"] == ["person", "car"]
     # logged as failed, and no storage object was written (zero penalties, just a log)
     assert PetDetectionLog.objects.filter(passed=False).count() == 1
     from django.core.files.storage import default_storage
 
     assert not any(default_storage.listdir("pets")[1]) if default_storage.exists("pets") else True
+
+
+def test_upload_storage_failure_returns_json_502_not_html(auth_client, monkeypatch):
+    """A Cloudinary failure (e.g. bad credentials) must be a JSON 502, never an HTML 500."""
+    import cloudinary.exceptions
+
+    _mock_detection_pass(monkeypatch)
+
+    def boom(key, data, content_type="application/octet-stream"):
+        raise cloudinary.exceptions.AuthorizationRequired("Invalid Signature")
+
+    monkeypatch.setattr("apps.common.storage.upload_bytes", boom)
+    resp = auth_client.post(
+        "/api/pets/photos", {"photo": io.BytesIO(_png_bytes()), "name": "pet.png"}, format="multipart"
+    )
+    assert resp.status_code == 502
+    body = resp.json()
+    assert body["error"]["code"] == "storage_unavailable"
+    assert "storage" in body["error"]["message"].lower()
+    # Detection was still logged as passed (the gate ran before storage).
+    assert PetDetectionLog.objects.filter(passed=True).count() == 1
 
 
 def test_upload_requires_auth(api_client):

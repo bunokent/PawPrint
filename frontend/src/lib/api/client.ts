@@ -11,7 +11,9 @@ export class ApiError extends Error {
   constructor(err: AxiosError) {
     const data = err.response?.data as Record<string, { code?: string; message?: string; fields?: Record<string, unknown>; detected_labels?: string[]; session_expired?: boolean }> | undefined;
     const error = data?.error;
-    super(error?.message ?? err.message);
+    // Never surface raw axios text like "Request failed with status code 500" —
+    // if the server didn't send a JSON envelope, show a friendly generic message.
+    super(error?.message ?? "Something went wrong. Please try again.");
     this.name = "ApiError";
     this.code = error?.code ?? "network_error";
     this.status = err.response?.status ?? 0;

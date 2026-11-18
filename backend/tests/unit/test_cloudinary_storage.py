@@ -39,7 +39,8 @@ def fake_sdk(monkeypatch):
 
     def fake_url(public_id, **kwargs):
         calls["url"].append({"public_id": public_id, **kwargs})
-        return f"https://res.cloudinary.com/demo/signed/{public_id}"
+        # cloudinary>=1.47 returns a (url, options) tuple
+        return f"https://res.cloudinary.com/demo/signed/{public_id}", {}
 
     monkeypatch.setattr(cloudinary, "config", fake_config)
     monkeypatch.setattr(cloudinary.uploader, "upload", fake_upload)
@@ -118,6 +119,15 @@ def test_url_requires_name(settings, fake_sdk):
     settings.CLOUDINARY_URL = "cloudinary://k:s@c"
     with pytest.raises(ValueError, match="storage name"):
         CloudinaryStorage().url(None)
+
+
+def test_url_handles_bare_string_return(settings, fake_sdk, monkeypatch):
+    """Older SDK versions return a plain string instead of (url, options)."""
+    settings.CLOUDINARY_URL = "cloudinary://k:s@c"
+    monkeypatch.setattr(
+        cloudinary.utils, "cloudinary_url", lambda public_id, **kw: f"https://plain/{public_id}"
+    )
+    assert CloudinaryStorage().url("a.jpg") == "https://plain/a.jpg"
 
 
 def test_exists_and_size_and_delete(settings, fake_sdk):

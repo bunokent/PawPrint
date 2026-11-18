@@ -88,7 +88,9 @@ class CloudinaryStorage(Storage):
         }
         if expire:
             kwargs["expires_at"] = int(time.time()) + expire
-        return str(cloudinary.utils.cloudinary_url(name, **kwargs))
+        # cloudinary>=1.47 returns (url, options); older versions returned a bare string.
+        result = cloudinary.utils.cloudinary_url(name, **kwargs)
+        return result[0] if isinstance(result, tuple) else str(result)
 
     def size(self, name: str) -> int:
         return int(cloudinary.api.resource(name, resource_type=resource_type_for(name), type="private")["bytes"])

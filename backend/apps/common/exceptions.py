@@ -2,11 +2,14 @@
 
 from typing import Any
 
+import cloudinary.exceptions
 from django.http import HttpRequest
 from rest_framework import status
 from rest_framework.exceptions import APIException, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import exception_handler as drf_exception_handler
+
+STORAGE_UNAVAILABLE_MESSAGE = "Photo storage is temporarily unavailable. Please try again."
 
 
 class NoPetDetectedError(APIException):
@@ -26,6 +29,13 @@ def exception_handler(exc: Exception, context: dict[str, Any]) -> Response | Non
     response = drf_exception_handler(exc, context)
     request: HttpRequest | None = context.get("request")
     if response is None:
+        # Storage backend (Cloudinary) failures must surface as JSON, never as an
+        # HTML 500 page — e.g. wrong/placeholder credentials raise AuthorizationRequired.
+        if isinstance(exc, cloudinary.exceptions.Error):
+            return Response(
+                {"error": {"code": "storage_unavailable", "message": STORAGE_UNAVAILABLE_MESSAGE}},
+                status=status.HTTP_502_BAD_GATEWAY,
+            )
         return None
     detail = response.data
     if isinstance(exc, NoPetDetectedError):

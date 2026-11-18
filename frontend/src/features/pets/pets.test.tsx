@@ -46,6 +46,9 @@ describe("PhotoUpload (YOLOv8 gatekeeper UX)", () => {
     uploadFile("landscape.jpg");
     const alert = await screen.findByTestId("no-pet-error");
     expect(alert).toHaveTextContent("No pet detected in the photo.");
+    // The full sentence is shown exactly once — never duplicated in the UI.
+    const sentence = "No pet detected in the photo. Please upload a clear photo of your pet.";
+    expect(alert.textContent?.split(sentence).length ?? 0).toBe(2);
     expect(alert).toHaveTextContent("person, car");
     expect(alert).toHaveTextContent("No strikes, no bans");
     expect(onUploaded).not.toHaveBeenCalled();

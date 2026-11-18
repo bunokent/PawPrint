@@ -42,6 +42,15 @@ describe("ApiError normalization", () => {
     expect((error as ApiError).code).toBe("network_error");
     expect((error as ApiError).status).toBe(0);
   });
+
+  it("never shows raw axios text for a non-JSON 500 (friendly fallback instead)", async () => {
+    mswServer.use(http.get("*/api/flyers", () => new HttpResponse("<html>500 page</html>", { status: 500 })));
+    const error = await api.get("/flyers").catch((e: unknown) => e);
+    const apiError = error as ApiError;
+    expect(apiError.status).toBe(500);
+    expect(apiError.message).toBe("Something went wrong. Please try again.");
+    expect(apiError.message).not.toContain("Request failed with status code");
+  });
 });
 
 describe("multipartConfig", () => {
