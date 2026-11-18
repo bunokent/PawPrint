@@ -327,6 +327,17 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   self-contained. Verified: `manage.py check` → 0 errors (only the intentional urls.W002
   warnings), `migrate` + `seed_demo` exit 0, **90 pytest passed @ 94.2%**, ruff + mypy
   clean, **Playwright 7/7 green**.
+- **Phase 10** — Host-side run fixes. With dotenv loading the root `.env`, host-side
+  `python manage.py runserver` must point at **host-published** services: `.env` /
+  `.env.example` now use `REDIS_URL=redis://127.0.0.1:6379/0` and `EMAIL_HOST=127.0.0.1`
+  (compose's `redis`/`mailpit` hostnames don't resolve on the host); the compose
+  `x-app-environment` anchor pins `redis:6379` / `mailpit:1025` inside web/celery so one
+  `.env` serves both worlds. Verified host-side (no `PAWPRINT_TESTING`): `/api/health` →
+  ok, demo login + `/api/auth/me` → 200 (throttle cache on Redis works). Google OAuth
+  `redirect_uri_mismatch` is console config, not code: the frontend sends
+  `redirect_uri = <origin>/auth/login`, so register exactly `http://localhost:5173/auth/login`
+  (and the `127.0.0.1` variant) as an Authorized redirect URI of the OAuth client in
+  Google Cloud Console. Health route is `/api/health` (bare `/health` is a 404).
 
 **Final status:** backend **90 passed @ 94.2%** (100% services/drivers/vision/storage);
 frontend **65 vitest tests** @ 88.5/81.0/85.4/89.2 (rewards 100%) + **7 Playwright tests
