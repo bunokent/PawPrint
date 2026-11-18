@@ -22,6 +22,8 @@ media/
 staticfiles/
 backend/.test-media/
 backend/yolov8n.pt
+backend/yolov8s-worldv2.pt
+/weights/
 
 # Playwright / E2E artifacts
 frontend/test-results/

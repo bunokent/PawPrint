@@ -178,6 +178,35 @@ describe("BuilderWizard", () => {
     expect(await screen.findByTestId("flyer-sheet")).toBeInTheDocument();
   });
 
+  it("keeps species editable when YOLO-World detects multiple standard species", async () => {
+    useAuth.setState({ user: mockUser(), checked: true });
+    mswServer.use(
+      http.post("*/api/pets/photos", () =>
+        HttpResponse.json(
+          {
+            key: "pets/photos/ambiguous.jpg",
+            url: "http://localhost:8000/media/pets/photos/ambiguous.jpg",
+            thumb_key: "pets/photos/thumb_ambiguous.jpg",
+            thumb_url: "http://localhost:8000/media/pets/photos/thumb_ambiguous.jpg",
+            pet_classes: ["cat", "dog"],
+            detected_classes: ["cat", "dog"],
+            max_confidence: 0.717,
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    renderWithProviders(<BuilderWizard />, { route: "/builder?mode=emergency" });
+    fireEvent.change(screen.getByLabelText("Choose a pet photo"), {
+      target: { files: [new File(["img"], "ambiguous.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByRole("heading", { name: "Tell us about the pet" });
+    const species = screen.getByLabelText("Species");
+    expect(species).toHaveValue("dog");
+    expect(species).toBeEnabled();
+    expect(screen.queryByText(/Species auto-detected/)).not.toBeInTheDocument();
+  });
+
   it("blocks publish when the reward is enabled but empty", async () => {
     useAuth.setState({ user: mockUser(), checked: true });
     const user = userEvent.setup();

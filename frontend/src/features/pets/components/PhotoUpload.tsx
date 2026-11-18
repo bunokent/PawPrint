@@ -17,14 +17,14 @@ interface PhotoUploadProps {
 const UPLOAD_STAGES = [
   { id: "uploading", label: "Uploading photo", shortLabel: "Upload", detail: "Sending your photo over a secure connection" },
   { id: "scanning", label: "Scanning photo", shortLabel: "Scan", detail: "Reading the image and preparing it for pet detection" },
-  { id: "detecting", label: "Detecting your pet", shortLabel: "Detect", detail: "YOLOv8 is looking for a pet in your photo" },
+  { id: "detecting", label: "Detecting your pet", shortLabel: "Detect", detail: "YOLO-World is looking for a pet in your photo" },
   { id: "saving", label: "Saving securely", shortLabel: "Save", detail: "Removing metadata and preparing your private preview" },
 ] as const;
 
 type UploadStage = (typeof UPLOAD_STAGES)[number]["id"];
 
 /**
- * Pet-photo upload with the YOLOv8 gatekeeper UX: a non-pet photo gets a 422
+ * Pet-photo upload with the YOLO-World gatekeeper UX: a non-pet photo gets a 422
  * "no pet detected" response — never a ban — and the user can pick another file.
  */
 export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {

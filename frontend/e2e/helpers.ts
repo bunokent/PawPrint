@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 /** Django API origin (the webServer in playwright.config.ts runs it on :8010). */
 export const API = "http://127.0.0.1:8010/api";
 
-/** Photo fixtures verified against the real YOLOv8n gatekeeper. */
+/** Photo fixtures verified against the real YOLO-World gatekeeper. */
 export const fixture = (name: string) => path.join(process.cwd(), "e2e", "fixtures", name);
 
 export const DEMO = { email: "mia@example.com", password: "demo1234" };

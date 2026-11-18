@@ -17,7 +17,7 @@ from .services import PetPhotoService, PetService
 
 
 class PhotoUploadView(APIView):
-    """POST /api/pets/photos — YOLOv8-gated pet photo upload (10/min)."""
+    """POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min)."""
 
     permission_classes = [IsAuthenticated]
     throttle_classes = [UploadThrottle]

@@ -42,10 +42,10 @@ description: Engineering and UI conventions for PawPrint. Always follow the `tas
   - Generate all API DTOs via `openapi-typescript` from `drf-spectacular` schema (`src/lib/api/schema.d.ts`) — never hand-write backend DTOs.
   - Zod + React Hook Form for all forms.
 
-## AI Pet Detection Gatekeeper (YOLOv8 — Replaces Moderation/Bans)
+## AI Pet Detection Gatekeeper (YOLO-World — Replaces Moderation/Bans)
 - Every uploaded pet photo passes `PetDetectionService.validate_pet_image(image_bytes)` BEFORE uploading to private cloud storage (Cloudinary).
-- Uses `ultralytics.YOLO("yolov8n.pt")` (singleton/cached model instance) checking COCO animal/pet class IDs:
-  - `14`: bird, `15`: cat, `16`: dog, `17`: horse, `18`: sheep, `19`: cow (configurable confidence threshold, default `>= 0.45`).
+- Uses `ultralytics.YOLOWorld("yolov8s-worldv2.pt")`, lazily loaded and cached once per process, with `model.set_classes()` configured for expanded open-vocabulary animal labels.
+- `ANIMAL_CATEGORY_BY_LABEL` groups specific outputs into Domestic Pet, Zoo / Exotic, Reptile, Small Mammal, Farm Animal, Bird, and Fish categories; acceptance is label-based (never COCO class IDs), with configurable confidence defaulting to `>= 0.20`.
 - **If a pet is detected**: Strip EXIF metadata via Pillow, generate thumbnail, and upload to private Cloudinary storage (delivery type `private`, signed URLs only).
 - **If NO pet is detected**: Discard immediately (never saved to storage) and raise `NoPetDetectedError` → HTTP `422 Unprocessable Entity` with clear message (`"No pet detected in the photo. Please upload a clear photo of your pet."`) and detected labels so the user can retry.
 - **Zero penalties**: No user strikes, no suspensions, no banning. Users can immediately select another photo.

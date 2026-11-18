@@ -29,7 +29,7 @@ function Harness({ spy }: { spy: (r: PhotoUploadResult) => void }) {
   );
 }
 
-describe("PhotoUpload (YOLOv8 gatekeeper UX)", () => {
+describe("PhotoUpload (YOLO-World gatekeeper UX)", () => {
   it("uploads a pet photo and shows the preview + detected badge", async () => {
     const onUploaded = vi.fn();
     renderWithProviders(<Harness spy={onUploaded} />);

@@ -3,7 +3,7 @@
 This project is governed by two skills. Read and follow both before writing any code:
 
 1. **`.opencode/skills/pawprint/SKILL.md`** — PawPrint engineering & design conventions
-   (2-mode access model, selector/service layering, axios client, YOLOv8 gatekeeper,
+   (2-mode access model, selector/service layering, axios client, YOLO-World gatekeeper,
    commit + tests + docs discipline).
 2. **The `taste` skill** at `.agents/skills/design-taste-frontend/SKILL.md`
    (`design-taste-frontend`, tasteskill 2.5.1) — every UI component, page, form, modal and

@@ -1,14 +1,16 @@
-"""PetDetectionService — YOLOv8 pet-only gatekeeper.
+"""PetDetectionService — YOLO-World animal-only gatekeeper.
 
-Every uploaded photo is validated BEFORE any S3 write. Non-pet photos are discarded
-immediately and raise NoPetDetectedError (HTTP 422). There are no strikes and no bans —
-the user can simply pick another photo.
+Every uploaded pet photo is validated BEFORE any Cloudinary write. Non-animal photos are discarded
+immediately and raise NoPetDetectedError (HTTP 422). There are no strikes and no bans — the user can
+simply pick another photo.
 """
 
 from __future__ import annotations
 
 import io
 import logging
+from pathlib import Path
+from threading import Lock
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -19,30 +21,133 @@ from apps.common.exceptions import NoPetDetectedError
 from .dto import DetectionResult
 
 if TYPE_CHECKING:
-    from ultralytics import YOLO
+    from ultralytics import YOLOWorld
 
 logger = logging.getLogger(__name__)
 
-_MODEL: YOLO | None = None
+# Open-vocabulary labels passed to YOLOWorld.set_classes(). The mapping keeps the
+# model's specific output labels while grouping them into PawPrint animal categories.
+ANIMAL_CATEGORY_BY_LABEL: dict[str, str] = {
+    # Domestic pets
+    "dog": "Domestic Pet",
+    "cat": "Domestic Pet",
+    # Zoo / exotic animals
+    "lion": "Zoo / Exotic",
+    "tiger": "Zoo / Exotic",
+    "wolf": "Zoo / Exotic",
+    "fox": "Zoo / Exotic",
+    "bear": "Zoo / Exotic",
+    "elephant": "Zoo / Exotic",
+    "giraffe": "Zoo / Exotic",
+    "zebra": "Zoo / Exotic",
+    "kangaroo": "Zoo / Exotic",
+    "koala": "Zoo / Exotic",
+    "panda": "Zoo / Exotic",
+    "monkey": "Zoo / Exotic",
+    "deer": "Zoo / Exotic",
+    # Reptiles
+    "crocodile": "Reptile",
+    "alligator": "Reptile",
+    "snake": "Reptile",
+    "lizard": "Reptile",
+    "gecko": "Reptile",
+    "iguana": "Reptile",
+    "chameleon": "Reptile",
+    "turtle": "Reptile",
+    "tortoise": "Reptile",
+    # Small mammals
+    "hamster": "Small Mammal",
+    "guinea pig": "Small Mammal",
+    "ferret": "Small Mammal",
+    "chinchilla": "Small Mammal",
+    "mouse": "Small Mammal",
+    "rat": "Small Mammal",
+    "hedgehog": "Small Mammal",
+    "sugar glider": "Small Mammal",
+    "rabbit": "Small Mammal",
+    # Farm animals, including farm birds
+    "horse": "Farm Animal",
+    "sheep": "Farm Animal",
+    "cow": "Farm Animal",
+    "goat": "Farm Animal",
+    "pig": "Farm Animal",
+    "donkey": "Farm Animal",
+    "llama": "Farm Animal",
+    "alpaca": "Farm Animal",
+    "chicken": "Farm Animal",
+    "duck": "Farm Animal",
+    "goose": "Farm Animal",
+    "turkey": "Farm Animal",
+    # Birds
+    "bird": "Bird",
+    "parrot": "Bird",
+    "cockatiel": "Bird",
+    "parakeet": "Bird",
+    "budgerigar": "Bird",
+    "canary": "Bird",
+    "finch": "Bird",
+    "lovebird": "Bird",
+    "macaw": "Bird",
+    "cockatoo": "Bird",
+    "pigeon": "Bird",
+    "dove": "Bird",
+    # Fish
+    "fish": "Fish",
+    "goldfish": "Fish",
+    "betta fish": "Fish",
+    "koi": "Fish",
+    "guppy": "Fish",
+    "angelfish": "Fish",
+    "clownfish": "Fish",
+}
+
+ANIMAL_CLASSES: tuple[str, ...] = tuple(ANIMAL_CATEGORY_BY_LABEL)
+DEFAULT_YOLO_WORLD_MODEL = "yolov8s-worldv2.pt"
+
+_MODEL: YOLOWorld | None = None
+_MODEL_LOCK = Lock()
 
 
-def _get_model() -> YOLO:
-    """Singleton, lazily-loaded YOLOv8 model instance."""
+def _resolve_world_model_path(path: str) -> str:
+    """Return a YOLO-World checkpoint path, replacing stale non-World paths."""
+    if "world" not in Path(path).name.lower():
+        logger.warning(
+            "YOLO_MODEL_PATH=%r is not a YOLO-World checkpoint; using %r",
+            path,
+            DEFAULT_YOLO_WORLD_MODEL,
+        )
+        return DEFAULT_YOLO_WORLD_MODEL
+    return path
+
+
+def _get_model() -> YOLOWorld:
+    """Lazily load, configure, and cache one YOLO-World model per process."""
     global _MODEL
     if _MODEL is None:
-        from ultralytics import YOLO
+        with _MODEL_LOCK:
+            if _MODEL is None:
+                from ultralytics import YOLOWorld
 
-        _MODEL = YOLO(settings.YOLO_MODEL_PATH)
+                model_path = _resolve_world_model_path(settings.YOLO_MODEL_PATH)
+                model = YOLOWorld(model_path)
+                if not hasattr(getattr(model, "model", None), "set_classes"):
+                    raise RuntimeError(
+                        f"YOLO-World checkpoint required at {model_path!r}; "
+                        f"loaded {type(getattr(model, 'model', model)).__name__}. "
+                        f"Set YOLO_MODEL_PATH={DEFAULT_YOLO_WORLD_MODEL}."
+                    )
+                model.set_classes(list(ANIMAL_CLASSES))
+                _MODEL = model
     return _MODEL
 
 
 class PetDetectionService:
-    """Validates that an image contains a pet (COCO animal classes)."""
+    """Validates that an image contains an animal from the configured categories."""
 
     def validate_pet_image(self, image_bytes: bytes) -> DetectionResult:
-        """Run YOLOv8 over the image; return pass/fail plus detected labels.
+        """Run YOLO-World over the image; return pass/fail plus detected labels.
 
-        Raises NoPetDetectedError when no pet class clears the confidence threshold.
+        Raises NoPetDetectedError when no configured animal clears the confidence threshold.
         """
         model = _get_model()
         image = Image.open(io.BytesIO(image_bytes))
@@ -59,12 +164,12 @@ class PetDetectionService:
             if boxes is None:
                 continue
             for cls_id, conf in zip(boxes.cls.tolist(), boxes.conf.tolist(), strict=True):
-                label = str(names[int(cls_id)])
+                label = str(names[int(cls_id)]).strip().lower()
                 max_confidence = max(max_confidence, float(conf))
                 if label not in detected_classes:
                     detected_classes.append(label)
                 if (
-                    int(cls_id) in settings.YOLO_PET_CLASS_IDS
+                    label in ANIMAL_CATEGORY_BY_LABEL
                     and float(conf) >= settings.YOLO_CONFIDENCE_THRESHOLD
                     and label not in pet_classes
                 ):

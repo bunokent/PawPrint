@@ -129,19 +129,72 @@ def test_vision_model_str_and_max_conf_empty(monkeypatch):
 def test_vision_singleton_model_loader(monkeypatch, settings):
     import apps.vision.services as svc
 
-    class FakeYOLO:
+    class FakeYOLOWorld:
         def __init__(self, path):
             self.path = path
+            self.model = self
+            self.class_calls = []
+
+        def set_classes(self, classes):
+            self.class_calls.append(classes)
 
     monkeypatch.setattr(svc, "_MODEL", None)
     import types
 
     fake_ultra = types.ModuleType("ultralytics")
-    fake_ultra.YOLO = FakeYOLO
+    fake_ultra.YOLOWorld = FakeYOLOWorld
     monkeypatch.setitem(__import__("sys").modules, "ultralytics", fake_ultra)
     model = svc._get_model()
-    assert isinstance(model, FakeYOLO)
-    assert svc._get_model() is model  # singleton
+    assert isinstance(model, FakeYOLOWorld)
+    assert model.path == settings.YOLO_MODEL_PATH
+    assert model.class_calls == [list(svc.ANIMAL_CLASSES)]
+    assert svc._get_model() is model  # singleton: no second load or set_classes call
+    assert model.class_calls == [list(svc.ANIMAL_CLASSES)]
+
+
+def test_vision_loader_falls_back_from_stale_non_world_path(monkeypatch, settings):
+    import types
+
+    import apps.vision.services as svc
+
+    class FakeYOLOWorld:
+        def __init__(self, path):
+            self.path = path
+            self.model = self
+            self.class_calls = []
+
+        def set_classes(self, classes):
+            self.class_calls.append(classes)
+
+    settings.YOLO_MODEL_PATH = "yolov8n.pt"
+    monkeypatch.setattr(svc, "_MODEL", None)
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLOWorld = FakeYOLOWorld
+    monkeypatch.setitem(__import__("sys").modules, "ultralytics", fake_ultra)
+
+    model = svc._get_model()
+    assert model.path == svc.DEFAULT_YOLO_WORLD_MODEL
+    assert model.class_calls == [list(svc.ANIMAL_CLASSES)]
+
+
+def test_vision_loader_rejects_checkpoint_without_world_head(monkeypatch, settings):
+    import types
+
+    import apps.vision.services as svc
+
+    class NonWorldYOLOWorld:
+        def __init__(self, path):
+            self.path = path
+            self.model = object()
+
+    settings.YOLO_MODEL_PATH = svc.DEFAULT_YOLO_WORLD_MODEL
+    monkeypatch.setattr(svc, "_MODEL", None)
+    fake_ultra = types.ModuleType("ultralytics")
+    fake_ultra.YOLOWorld = NonWorldYOLOWorld
+    monkeypatch.setitem(__import__("sys").modules, "ultralytics", fake_ultra)
+
+    with pytest.raises(RuntimeError, match="YOLO-World checkpoint required"):
+        svc._get_model()
 
 
 # ---------------------------------------------------------------- flyers services gaps

@@ -280,7 +280,7 @@ paths:
   /api/pets/photos:
     post:
       operationId: pets_photos_create
-      description: POST /api/pets/photos — YOLOv8-gated pet photo upload (10/min).
+      description: POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min).
       tags:
       - pets
       responses:

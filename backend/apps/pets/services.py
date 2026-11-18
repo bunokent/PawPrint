@@ -42,7 +42,7 @@ class PetService:
 
 
 class PetPhotoService:
-    """Photo upload pipeline: YOLOv8 gate → EXIF strip → private S3 → thumbnail task."""
+    """Photo upload pipeline: YOLO-World gate → EXIF strip → private S3 → thumbnail task."""
 
     detection = PetDetectionService()
 

@@ -11,7 +11,7 @@ test("registered user publishes a lost-pet flyer with a reward", async ({ page }
   await page.goto("/builder?mode=emergency");
   await expect(page.getByRole("heading", { name: "Report a lost pet" })).toBeVisible();
 
-  // Step 1 — photo upload passes the YOLOv8 pet gate and auto-advances to step 2
+  // Step 1 — photo upload passes the YOLO-World pet gate and auto-advances to step 2
   // (the "Pet detected ✓" badge lives on step 1, which unmounts on success).
   const upload = page.waitForResponse(
     (r) => r.url().endsWith("/api/pets/photos") && r.request().method() === "POST",

@@ -227,7 +227,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description POST /api/pets/photos — YOLOv8-gated pet photo upload (10/min). */
+        /** @description POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min). */
         post: operations["pets_photos_create"];
         delete?: never;
         options?: never;

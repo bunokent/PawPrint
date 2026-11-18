@@ -243,10 +243,8 @@ FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173")
 # ---------------------------------------------------------------------------
 # AI vision gatekeeper
 # ---------------------------------------------------------------------------
-YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", "yolov8n.pt")
-YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.60"))
-# COCO class ids treated as pets/animals.
-YOLO_PET_CLASS_IDS = {14, 15, 16, 17, 18, 19}
+YOLO_MODEL_PATH = os.environ.get("YOLO_MODEL_PATH", "yolov8s-worldv2.pt")
+YOLO_CONFIDENCE_THRESHOLD = float(os.environ.get("YOLO_CONFIDENCE_THRESHOLD", "0.20"))
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

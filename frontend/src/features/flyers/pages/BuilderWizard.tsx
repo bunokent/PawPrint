@@ -15,20 +15,15 @@ import { FlyerCard } from "@/components/FlyerCard";
 
 const SPECIES = ["dog", "cat", "bird", "horse", "other"] as const;
 
-// Map YOLO-detected class labels to our species values. YOLO pet classes (COCO ids 14-19):
-// bird, cat, dog, horse, sheep, cow → map sheep/cow to "other".
+// Map YOLO-World's open-vocabulary labels to our standard species values.
+// Ambiguous multi-species detections stay editable; expanded animals use "other".
 type Species = (typeof SPECIES)[number];
 function detectedSpecies(detectedClasses: string[]): Species | null {
-  const label = detectedClasses[0]?.toLowerCase() ?? "";
-  const map: Record<string, Species> = {
-    dog: "dog",
-    cat: "cat",
-    bird: "bird",
-    horse: "horse",
-    sheep: "other",
-    cow: "other",
-  };
-  return map[label] ?? null;
+  const labels = new Set(detectedClasses.map((label) => label.toLowerCase()));
+  const standardMatches = SPECIES.slice(0, 4).filter((species) => labels.has(species));
+  if (standardMatches.length === 1) return standardMatches[0];
+  if (standardMatches.length > 1) return null;
+  return detectedClasses.length > 0 ? "other" : null;
 }
 
 const petSchema = z.object({

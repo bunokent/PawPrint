@@ -13,7 +13,7 @@ STORAGE_UNAVAILABLE_MESSAGE = "Photo storage is temporarily unavailable. Please 
 
 
 class NoPetDetectedError(APIException):
-    """Raised when YOLOv8 finds no pet in an uploaded photo. Zero penalties — retry freely."""
+    """Raised when YOLO-World finds no pet in an uploaded photo. Zero penalties — retry freely."""
 
     status_code = status.HTTP_422_UNPROCESSABLE_ENTITY
     default_detail = "No pet detected in the photo. Please upload a clear photo of your pet."

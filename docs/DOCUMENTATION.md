@@ -17,9 +17,9 @@ product:
 - **Adoption Outreach Mode** — warm, welcoming adoption flyers with personality tags and
   shelter/foster framing.
 
-Every uploaded pet photo passes a YOLOv8 pet-detection gatekeeper before it ever reaches
-storage. Non-pet photos are rejected with a friendly 422 — no strikes, no bans. The web app
-(`frontend/`, React 19 + TS + Vite) implements the full product in the browser, and
+Every uploaded pet photo passes a YOLO-World open-vocabulary animal-detection gatekeeper before
+it ever reaches storage. Non-animal photos are rejected with a friendly 422 — no strikes, no bans.
+The web app (`frontend/`, React 19 + TS + Vite) implements the full product in the browser, and
 Playwright E2E covers the 6 critical journeys end-to-end.
 
 ## 2. Architecture & Stack
@@ -32,7 +32,8 @@ Playwright E2E covers the 6 critical journeys end-to-end.
 - **Storage**: Cloudinary (private delivery type, HMAC-signed URLs only) via the `cloudinary`
   SDK, wrapped in a Django `Storage` backend (`apps/common/cloudinary_storage.py`).
 - **Payments**: Stripe Python SDK (test mode) + PayMongo REST via httpx (GCash Checkout, QR Ph).
-- **AI Vision**: YOLOv8 (`ultralytics`, `yolov8n.pt`) pet detection gatekeeper.
+- **AI Vision**: Ultralytics YOLO-World (`yolov8s-worldv2.pt`) with 64 configured animal labels,
+  grouped into domestic, zoo/exotic, reptile, small-mammal, farm, bird, and fish categories.
 - **Exports**: WeasyPrint A4@300dpi PNG/PDF flyers + Pillow thumbnails; Playwright for
   browser-side exports.
 - **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `mailpit` (storage is
@@ -52,7 +53,7 @@ Playwright E2E covers the 6 critical journeys end-to-end.
 | View flyer detail (incl. QR scan landing) | ✅ | ✅ |
 | Download / print A4 flyer exports | ✅ (active flyers) | ✅ |
 | Create / edit / delete own flyers | ❌ | ✅ |
-| Upload pet photos (YOLOv8-gated) | ❌ | ✅ |
+| Upload pet photos (YOLO-World-gated) | ❌ | ✅ |
 | Fund rewards (Stripe / GCash) | ❌ | ✅ |
 
 There is **no admin role, no staff flag, no strike/ban system**. Object-level mutations are
@@ -100,7 +101,7 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 | `POST /api/flyers/new` | Auth | Create flyer (dispatches A4 asset generation) |
 | `PATCH/DELETE /api/flyers/{id}/edit` | Auth (owner) | Update / resolve / delete own flyer |
 | `GET /api/flyers/mine` | Auth | Creator's own flyers |
-| `POST /api/pets/photos` | Auth | YOLOv8-gated photo upload (10/min) |
+| `POST /api/pets/photos` | Auth | YOLO-World-gated photo upload (10/min) |
 | `POST /api/pets` | Auth | Create pet record (links an uploaded photo) |
 | `POST /api/rewards` | Auth | Create reward payment (Stripe/GCash) → checkout URL / QR payload |
 | `GET /api/rewards/{id}/status` | Auth (payer/creator) | Poll payment status |
@@ -137,11 +138,25 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   outreach mode uses sage/teal/terracotta warmth. The detail page's Print button uses the
   same sheet.
 
-## 8. AI Pet Detection (YOLOv8 Gatekeeper)
+## 8. AI Pet Detection (YOLO-World Gatekeeper)
 
-- `PetDetectionService.validate_pet_image(image_bytes)` runs a singleton
-  `ultralytics.YOLO("yolov8n.pt")` against COCO pet classes (14 bird, 15 cat, 16 dog,
-  17 horse, 18 sheep, 19 cow) at confidence ≥ 0.45 (configurable).
+- `PetDetectionService.validate_pet_image(image_bytes)` lazily loads one process-local,
+  lock-protected `ultralytics.YOLOWorld(settings.YOLO_MODEL_PATH)` singleton
+  (default `yolov8s-worldv2.pt`, cached after the first upload) and calls
+  `model.set_classes(list(ANIMAL_CLASSES))` with 64 open-vocabulary animal labels.
+- `ANIMAL_CATEGORY_BY_LABEL` groups the raw model labels into **Domestic Pet**
+  (`dog`, `cat`), **Zoo / Exotic** (`lion`, `tiger`, `wolf`, `fox`, `bear`, `elephant`,
+  `giraffe`, `zebra`, `kangaroo`, `koala`, `panda`, `monkey`, `deer`), **Reptile**
+  (`crocodile`, `alligator`, `snake`, `lizard`, `gecko`, `iguana`, `chameleon`, `turtle`,
+  `tortoise`), **Small Mammal** (`hamster`, `guinea pig`, `ferret`, `chinchilla`, `mouse`,
+  `rat`, `hedgehog`, `sugar glider`, `rabbit`), **Farm Animal**, **Bird**, and **Fish**.
+  Acceptance is label-based (not COCO class IDs), raw labels such as `dog` and `lion` stay in
+  `pet_classes` / `detected_classes`, and the confidence threshold defaults to `0.20`
+  (`YOLO_CONFIDENCE_THRESHOLD`) so non-COCO species are reliably accepted.
+- The loader falls back to `yolov8s-worldv2.pt` if a stale non-World `YOLO_MODEL_PATH` is
+  configured, and raises a clear `RuntimeError` if the checkpoint does not contain a World head.
+  Generated weights (`backend/yolov8s-worldv2.pt`, `/weights/`) are git-ignored; Ultralytics
+  downloads them on first lazy load.
 - **Pass**: EXIF stripped via Pillow, thumbnail generated, upload to private Cloudinary
   (delivery type `private`), `PetDetectionLog(passed=True)`, signed preview URL returned.
 - **Fail**: bytes discarded before any storage write, `PetDetectionLog(passed=False)`,
@@ -157,8 +172,12 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   motion disables the scan/spinner/progress animations without hiding status information.
 - The 422 renders a friendly `no-pet-error` box ("No strikes, no bans — just pick another photo")
   and the picker stays open for an immediate retry; a passing photo shows a "Pet detected ✓" badge.
-  E2E journey ④ drives both photos through the real YOLOv8n model (`e2e/fixtures/dog.jpg` passes
-  @ ~0.81, `landscape.jpg` → 422).
+  In the builder, one recognized standard species auto-selects and disables the species field;
+  ambiguous multi-species results (e.g. `cat` + `dog`) stay editable, and expanded animals map to
+  `other`.
+- E2E journey ④ drives both photos through the real YOLO-World model: `e2e/fixtures/dog.jpg`
+  passes as `cat` @ 0.717 + `dog` @ 0.655 (ambiguous species stays editable, defaulting to dog),
+  while `landscape.jpg` → 422.
 
 ## 9. Payments — Rewards (Stripe Test + GCash / QR Ph)
 
@@ -207,17 +226,19 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 ## 11. Testing & Coverage
 
 - Backend: `cd backend && .venv/bin/python -m pytest tests/ -q --cov=apps --cov-fail-under=80`
-  → **90 passed, 94.2% total** (100% on all `services.py`, `drivers.py`, `PetDetectionService`,
-  the Cloudinary storage driver);
+  → **107 passed, 94.42% total** (100% on all `services.py`, `drivers.py`,
+  `apps/vision/services.py`, and the Cloudinary storage driver);
   `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
   `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
-  `(provider, event_id)` → single processing); 422-before-storage tests (non-pet bytes never
-  reach Cloudinary); Cloudinary driver unit tests (SDK mocked, 100% on the driver);
+  `(provider, event_id)` → single processing); 422-before-storage tests (non-animal bytes never
+  reach Cloudinary); expanded YOLO-World category/threshold/loader tests (64 labels,
+  confidence `0.20`, stale-path fallback, non-World checkpoint rejection); Cloudinary driver
+  unit tests (SDK mocked, 100% on the driver);
   `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
-- Frontend: `npm run test:run` → **68 Vitest tests, 6 files** (RTL + MSW, jsdom), including
+- Frontend: `npm run test:run` → **69 Vitest tests, 6 files** (RTL + MSW, jsdom), including
   drag-and-drop, real Axios upload-progress callbacks, all four live processing labels, the animated
-  indeterminate bar, and successful completion;
-  `npm run test:coverage` → **87.96% stmts / 81.22% branches / 84.07% funcs / 89.1% lines**
+  indeterminate bar, ambiguous-species editability, and successful completion;
+  `npm run test:coverage` → **87.91% stmts / 81.29% branches / 84.21% funcs / 88.95% lines**
   (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
   `npx tsc -b --noEmit` clean; `npm run build` green.
 - E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **6 journeys /
@@ -225,7 +246,7 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   :9100), the Django backend on :8010 with `PAWPRINT_TESTING=1` (eager Celery, locmem, local
   PG :5433), and the Vite dev server on :5173 proxying to :8010. Journeys: ① guest browse →
   filter → search → detail+QR, ② register → logout → login (demo account), ③ create an
-  emergency flyer through the 3-step wizard (YOLOv8-gated upload) → public detail page,
+  emergency flyer through the 3-step wizard (YOLO-World-gated upload) → public detail page,
   ④ landscape photo → 422 `no_pet_detected` retry UX → dog photo passes, ⑤ GCash reward
   checkout → QR modal → HMAC-signed PayMongo webhook flips status to `succeeded` (and a
   forged signature is 400), ⑥ open the flyer's `qr_target_value` like a scanner → public
@@ -399,6 +420,20 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   sequence. Verified at desktop and phone browser sizes; **68 Vitest tests**, coverage
   **87.96/81.22/84.07/89.1**, `tsc -b` + `vite build`, and **7/7 Playwright journeys** green.
 
-**Final status:** backend **97 passed @ 94.0%** (100% services/drivers/vision/storage);
-frontend **68 vitest tests** @ 87.96/81.22/84.07/89.1 (rewards 100%) + **7 Playwright tests
+- **Phase 14** — Detection migration: COCO YOLOv8 → Ultralytics **YOLO-World**
+  (`yolov8s-worldv2.pt`). `PetDetectionService` now lazily loads one lock-protected process
+  singleton, calls `set_classes()` with 64 animal labels, accepts labels through
+  `ANIMAL_CATEGORY_BY_LABEL` (Domestic Pet / Zoo-Exotic / Reptile / Small Mammal / Farm Animal /
+  Bird / Fish), preserves raw labels in the API, and defaults `YOLO_CONFIDENCE_THRESHOLD` to
+  `0.20`. A stale non-World `YOLO_MODEL_PATH` falls back to the required World checkpoint, and a
+  checkpoint without a World head fails with a clear loader error instead of the raw
+  `DetectionModel.set_classes` `AttributeError`. Generated weights are ignored. The builder now
+  leaves ambiguous multi-species detections editable instead of auto-selecting the first label
+  (covered by a new wizard test).
+  Real inference: `dog.jpg` → `cat` @ 0.717 + `dog` @ 0.655; `landscape.jpg` → 422. Verified:
+  **107 pytest passed @ 94.42%** (`apps/vision/services.py` 100%), **69 Vitest** @
+  87.91/81.29/84.21/88.95, **7/7 Playwright**, ruff + mypy + `tsc -b` + `vite build` clean.
+
+**Final status:** backend **107 passed @ 94.42%** (100% services/drivers/vision/storage);
+frontend **69 vitest tests** @ 87.91/81.29/84.21/88.95 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.

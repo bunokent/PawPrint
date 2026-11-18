@@ -1,4 +1,4 @@
-"""PetDetectionLog — audit trail for the YOLOv8 gatekeeper (no strikes, no bans)."""
+"""PetDetectionLog — audit trail for the YOLO-World gatekeeper (no strikes, no bans)."""
 
 import uuid
 

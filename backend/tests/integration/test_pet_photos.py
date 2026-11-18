@@ -1,4 +1,4 @@
-"""Integration: YOLOv8-gated photo upload endpoint."""
+"""Integration: YOLO-World-gated photo upload endpoint."""
 
 import io
 

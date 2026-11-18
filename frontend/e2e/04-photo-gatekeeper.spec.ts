@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { fixture, login } from "./helpers";
 
 /**
- * Journey 4 — YOLOv8 pet-photo gatekeeper: a landscape photo is rejected with a
+ * Journey 4 — YOLO-World pet-photo gatekeeper: a landscape photo is rejected with a
  * 422 no_pet_detected (never a ban), and the user can immediately retry with a
  * real pet photo that passes.
  */
