@@ -51,16 +51,18 @@ class FlyerService:
             reward_amount_cents=reward_amount_cents,
             reward_currency=reward_currency,
             qr_target_type="flyer_url",
-            qr_target_value=QrService.target_url("__pending__", settings.FRONTEND_BASE_URL),
-            status=Flyer.Status.GENERATING,
+            qr_target_value="",
+            status=Flyer.Status.ACTIVE,
         )
-        # Now that we have the id, set the real QR target.
+        # Public immediately: show in the lost/adoption gallery while assets
+        # (PDF/PNG exports) generate in the background. Set the real QR target
+        # now that we have the flyer id.
         flyer.qr_target_value = QrService.target_url(str(flyer.pk), settings.FRONTEND_BASE_URL)
         flyer.save(update_fields=["qr_target_value"])
         from .tasks import generate_flyer_assets
 
         generate_flyer_assets.delay(str(flyer.pk))
-        flyer.refresh_from_db()  # reflects eager execution in tests; stays 'generating' in async prod
+        flyer.refresh_from_db()  # reflects eager execution in tests; stays 'active' in async prod
         return flyer
 
     @staticmethod
@@ -68,7 +70,8 @@ class FlyerService:
     def update_flyer(flyer: Flyer, **fields) -> Flyer:
         for key, value in fields.items():
             setattr(flyer, key, value)
-        flyer.status = Flyer.Status.GENERATING
+        # Stay ACTIVE so the flyer remains public while assets regenerate.
+        flyer.status = Flyer.Status.ACTIVE
         flyer.save()
         from .tasks import generate_flyer_assets
 

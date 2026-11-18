@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>LOST PET — {{ flyer.pet.name }}</title>
 <style>
-  /* A4 @300dpi print fidelity: 210mm x 297mm, single page, full bleed */
+  /* A4 @300dpi print fidelity: 210mm x 297mm, guaranteed single page */
   @page { size: A4; margin: 0; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { width: 210mm; height: 297mm; }
@@ -17,18 +17,16 @@
   /* ---------- Header band ---------- */
   .band {
     background: #7f1d1d; color: #ffffff;
-    padding: 12mm 16mm; display: flex; justify-content: space-between; align-items: center;
-    position: relative;
+    padding: 10mm 14mm; display: flex; justify-content: space-between; align-items: center;
   }
-  .band h1 { font-size: 38pt; font-weight: 900; letter-spacing: 0.04em; line-height: 1.05; }
-  .band .sub { font-size: 13pt; font-weight: 600; opacity: 0.94; line-height: 1.35; }
+  .band h1 { font-size: 34pt; font-weight: 900; letter-spacing: 0.04em; line-height: 1.05; }
+  .band .sub { font-size: 12pt; font-weight: 600; opacity: 0.94; line-height: 1.3; }
   .reward {
-    background: #f59e0b; color: #451a03; font-weight: 800; font-size: 14pt;
-    padding: 4mm 9mm; border-radius: 3mm; text-align: center; white-space: nowrap;
+    background: #f59e0b; color: #451a03; font-weight: 800; font-size: 13pt;
+    padding: 3.5mm 8mm; border-radius: 3mm; text-align: center; white-space: nowrap;
   }
-  /* Unique per-flyer corner accent badge */
   .corner-accent {
-    position: absolute; width: 14mm; height: 14mm; border-radius: 50%; top: 8mm; right: 12mm;
+    position: absolute; width: 13mm; height: 13mm; border-radius: 50%; top: 7mm; right: 11mm;
     z-index: 0; opacity: 0.55;
   }
   .corner-accent.v1 { background: #f59e0b; }
@@ -37,35 +35,35 @@
   .corner-accent.v4 { background: #991b1b; }
   .band > * { position: relative; z-index: 1; }
   /* ---------- Hero photo (no caption) ---------- */
-  .photo { padding: 9mm 16mm 4mm; text-align: center; }
+  .photo { padding: 8mm 14mm 3mm; text-align: center; }
   .photo img {
-    width: 122mm; height: 122mm; object-fit: cover; border-radius: 5mm;
+    width: 118mm; height: 118mm; object-fit: cover; border-radius: 5mm;
     border: 3mm solid #7f1d1d; box-shadow: 0 1mm 3mm rgba(0,0,0,0.18);
   }
   /* ---------- Name ---------- */
-  .name { text-align: center; font-size: 34pt; font-weight: 900; letter-spacing: 0.02em; padding: 1mm 0 1mm; text-transform: uppercase; }
-  .meta { text-align: center; font-size: 13pt; color: #4a3f38; padding-bottom: 4mm; }
+  .name { text-align: center; font-size: 32pt; font-weight: 900; letter-spacing: 0.02em; padding: 1mm 0 1mm; text-transform: uppercase; }
+  .meta { text-align: center; font-size: 12.5pt; color: #4a3f38; padding-bottom: 3mm; }
   /* ---------- Detail cards ---------- */
-  .grid { display: flex; gap: 8mm; padding: 0 16mm; page-break-inside: avoid; }
-  .card { flex: 1; border: 1.5pt solid #7f1d1d; border-radius: 3mm; padding: 6mm 8mm; background: #fff7f6; }
-  .card h2 { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 0.09em; color: #7f1d1d; margin-bottom: 2mm; }
-  .card p { font-size: 13pt; line-height: 1.55; color: #1a1410; }
+  .grid { display: flex; gap: 7mm; padding: 0 14mm; page-break-inside: avoid; }
+  .card { flex: 1; border: 1.5pt solid #7f1d1d; border-radius: 3mm; padding: 5mm 7mm; background: #fff7f6; page-break-inside: avoid; }
+  .card h2 { font-size: 10pt; text-transform: uppercase; letter-spacing: 0.09em; color: #7f1d1d; margin-bottom: 1.5mm; }
+  .card p { font-size: 12pt; line-height: 1.5; color: #1a1410; }
   /* ---------- Footer: QR + contact ---------- */
   .footer {
     margin-top: auto; display: flex; align-items: flex-end; justify-content: space-between;
-    padding: 6mm 16mm 9mm; page-break-inside: avoid;
+    padding: 5mm 14mm 8mm; page-break-inside: avoid;
   }
   .seal {
-    width: 11mm; height: 11mm; border: 1.2pt solid #7f1d1d; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center; font-size: 7pt;
-    font-weight: 900; color: #7f1d1d; margin-left: 6mm;
+    width: 10mm; height: 10mm; border: 1.2pt solid #7f1d1d; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 6.5pt;
+    font-weight: 900; color: #7f1d1d; margin-left: 5mm;
   }
-  .qr { width: 34mm; height: 34mm; }
+  .qr { width: 32mm; height: 32mm; }
   .contact { text-align: right; }
-  .contact h2 { font-size: 12.5pt; color: #7f1d1d; font-weight: 800; margin-bottom: 1mm; }
-  .contact p { font-size: 12.5pt; line-height: 1.5; color: #1a1410; }
+  .contact h2 { font-size: 12pt; color: #7f1d1d; font-weight: 800; margin-bottom: 1mm; }
+  .contact p { font-size: 12pt; line-height: 1.5; color: #1a1410; }
   /* ---------- Bottom strip ---------- */
-  .strip { background: #1a1410; color: #ffffff; font-size: 8.5pt; text-align: center; padding: 2.5mm; letter-spacing: 0.04em; }
+  .strip { background: #1a1410; color: #ffffff; font-size: 8pt; text-align: center; padding: 2mm; letter-spacing: 0.04em; }
 </style>
 </head>
 <body>

@@ -362,6 +362,10 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   unique seal number — while keeping the same clear information hierarchy.
   `config/settings.py` / `apps/flyers/tasks.py` pass `design_variant` to the template
   context. Verified live: both modes render exactly **1 page at A4** via WeasyPrint.
+- **Public visibility on create**: newly created flyers are now `ACTIVE` immediately
+  (`apps/flyers/services.py`), so they appear in the lost/adoption public gallery
+  right away instead of being hidden while assets generate. QR target is set after
+  the flyer id exists. Assets (PDF/PNG) still generate in the background via Celery.
   Suite: **97 pytest passed @ 94.0%**, 66 vitest, Playwright 7/7, ruff + mypy + tsc
   clean.
 
