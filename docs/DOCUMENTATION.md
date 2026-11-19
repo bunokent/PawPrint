@@ -221,9 +221,10 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `src/lib/api/schema.d.ts` (`npm run typegen` over `backend/schema.yml`).
 - Pages: `/` Home (emergency + outreach rails), `/flyers` Gallery (mode filter + FTS search +
   cursor pagination), `/flyers/:id` Public Flyer + QR + print/export + owner resolve/delete +
-  reward checkout, `/builder` 3-step wizard (photo gate → pet form → details/reward),
-  `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login` (also handles the Google
-  `?code=` callback), `/auth/register`.
+  reward checkout, `/builder` 3-step wizard (photo gate → pet form → details/reward; going
+  back to the photo step with an uploaded photo shows a **Next** button to continue without
+  re-uploading), `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login` (also
+  handles the Google `?code=` callback), `/auth/register`.
 - React 19 idioms: `useActionState` forms (dispatch wrapped in `startTransition` so `pending`
   works), `useOptimistic` publishing card on flyer create, ref-as-prop, React Compiler in
   `vite.config.ts` (disabled under Vitest so coverage maps to source). TanStack Query
@@ -476,6 +477,11 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   (raw often `bird`), landscape → 422. Verified: **121 pytest passed @ 94.77%**
   (`apps/vision/services.py` 100%), **70 Vitest** @ 88.12/81.31/84.21/89.18, **7/7 Playwright**,
   ruff + mypy + `tsc -b` + `vite build` clean.
+
+- **Phase 17** — Builder photo-step fix: going back from step 2 to the photo step with an
+  already-uploaded photo now shows a **Next** button, so continuing never requires
+  re-uploading (`BuilderWizard.tsx` `StepPhotoMode` + `onNext`). Regression test walks
+  upload → back → Next. Verified: **71 Vitest** tests green, `tsc -b` clean.
 
 **Final status:** backend **121 passed @ 94.77%** (100% services/drivers/vision/storage);
 frontend **70 vitest tests** @ 88.12/81.31/84.21/89.18 (rewards 100%) + **7 Playwright tests

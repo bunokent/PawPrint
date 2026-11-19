@@ -155,6 +155,7 @@ export function BuilderWizard() {
               setPhoto(r);
               setStep(1);
             }}
+            onNext={() => setStep(1)}
           />
         )}
         {step === 1 && photo && <StepPet photo={photo} mode={mode} onDone={(p) => { setPet(p); setStep(2); }} onBack={() => setStep(0)} />}
@@ -169,11 +170,13 @@ function StepPhotoMode({
   setMode,
   photo,
   onUploaded,
+  onNext,
 }: {
   mode: Mode;
   setMode: (m: Mode) => void;
   photo: PhotoUploadResult | null;
   onUploaded: (r: PhotoUploadResult) => void;
+  onNext: () => void;
 }) {
   return (
     <div className="card" style={{ padding: 28, display: "flex", flexDirection: "column", gap: 24 }} data-enter="3">
@@ -206,6 +209,13 @@ function StepPhotoMode({
       >
         <PhotoUpload onUploaded={onUploaded} uploaded={photo} />
       </FieldShell>
+      {photo && (
+        <div className="btn-row">
+          <Button type="button" onClick={onNext}>
+            Next
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

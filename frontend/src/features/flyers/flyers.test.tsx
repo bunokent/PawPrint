@@ -178,6 +178,25 @@ describe("BuilderWizard", () => {
     expect(await screen.findByTestId("flyer-sheet")).toBeInTheDocument();
   });
 
+  it("shows a Next button on the photo step when a photo is already uploaded", async () => {
+    useAuth.setState({ user: mockUser(), checked: true });
+    const user = userEvent.setup();
+    renderWithProviders(<BuilderWizard />, { route: "/builder?mode=emergency" });
+    fireEvent.change(screen.getByLabelText("Choose a pet photo"), {
+      target: { files: [new File(["img"], "bento.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByRole("heading", { name: "Tell us about the pet" });
+
+    // Go back to the photo step — the uploaded photo is still there.
+    await user.click(screen.getByRole("button", { name: "← Back" }));
+    expect(await screen.findByRole("heading", { name: "Report a lost pet" })).toBeInTheDocument();
+    expect(screen.getByAltText("Uploaded pet preview")).toBeInTheDocument();
+
+    // No re-upload needed: Next continues with the existing photo.
+    await user.click(screen.getByRole("button", { name: "Next" }));
+    expect(await screen.findByRole("heading", { name: "Tell us about the pet" })).toBeInTheDocument();
+  });
+
   it("keeps species editable when YOLO-World detects multiple standard species", async () => {
     useAuth.setState({ user: mockUser(), checked: true });
     mswServer.use(
