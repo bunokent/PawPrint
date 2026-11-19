@@ -4,6 +4,20 @@ info:
   version: 0.1.0
   description: Dual-mode lost-pet alert + adoption flyer generator
 paths:
+  /api/auth/avatar:
+    post:
+      operationId: auth_avatar_create
+      description: POST /api/auth/avatar — profile picture upload (10/min, no pet
+        gate).
+      tags:
+      - auth
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
   /api/auth/google/callback:
     post:
       operationId: auth_google_callback_create
@@ -99,11 +113,194 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/auth/profile:
+    patch:
+      operationId: auth_profile_partial_update
+      description: PATCH /api/auth/profile — update display_name and/or phone.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
   /api/auth/register:
     post:
       operationId: auth_register_create
       tags:
       - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
+      security:
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/authavatar:
+    post:
+      operationId: authavatar_create
+      description: POST /api/auth/avatar — profile picture upload (10/min, no pet
+        gate).
+      tags:
+      - authavatar
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/authgoogle/callback:
+    post:
+      operationId: authgoogle_callback_create
+      tags:
+      - authgoogle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleCallback'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/authgoogle/url:
+    post:
+      operationId: authgoogle_url_create
+      tags:
+      - authgoogle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GoogleUrl'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/authlogin:
+    post:
+      operationId: authlogin_create
+      tags:
+      - authlogin
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/authlogout:
+    post:
+      operationId: authlogout_create
+      tags:
+      - authlogout
+      responses:
+        '200':
+          description: No response body
+  /api/authme:
+    get:
+      operationId: authme_retrieve
+      tags:
+      - authme
+      responses:
+        '200':
+          description: No response body
+  /api/authprofile:
+    patch:
+      operationId: authprofile_partial_update
+      description: PATCH /api/auth/profile — update display_name and/or phone.
+      tags:
+      - authprofile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedProfileUpdate'
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/authregister:
+    post:
+      operationId: authregister_create
+      tags:
+      - authregister
       requestBody:
         content:
           application/json:
@@ -154,6 +351,84 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedFlyerList'
           description: ''
+  /api/flyers/:
+    get:
+      operationId: flyers_list_2
+      description: Public gallery — Guest Mode allowed. Cursor-paginated, FTS + mode
+        filter.
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - flyers
+      security:
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFlyerList'
+          description: ''
+  /api/flyers{id}:
+    get:
+      operationId: flyers_retrieve_2
+      description: Public flyer detail — Guest Mode allowed (QR scanners land here).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      security:
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/flyers{id}/edit:
+    patch:
+      operationId: flyers_edit_partial_update_2
+      description: PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: flyers_edit_destroy_2
+      description: PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly).
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - flyers
+      responses:
+        '204':
+          description: No response body
   /api/flyers/{id}:
     get:
       operationId: flyers_retrieve
@@ -237,6 +512,40 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/flyersmine:
+    get:
+      operationId: flyersmine_list
+      description: Authenticated user's own flyers (active + resolved).
+      parameters:
+      - name: cursor
+        required: false
+        in: query
+        description: The pagination cursor value.
+        schema:
+          type: string
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - flyersmine
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFlyerList'
+          description: ''
+  /api/flyersnew:
+    post:
+      operationId: flyersnew_create
+      tags:
+      - flyersnew
+      responses:
+        '200':
+          description: No response body
   /api/health:
     get:
       operationId: health_retrieve
@@ -277,12 +586,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/Pet'
           description: ''
+  /api/pets/:
+    post:
+      operationId: pets_create_2
+      tags:
+      - pets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PetCreate'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Pet'
+          description: ''
   /api/pets/photos:
     post:
       operationId: pets_photos_create
       description: POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min).
       tags:
       - pets
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PhotoUploadResponse'
+          description: ''
+  /api/petsphotos:
+    post:
+      operationId: petsphotos_create
+      description: POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min).
+      tags:
+      - petsphotos
       responses:
         '201':
           content:
@@ -314,6 +660,50 @@ paths:
               schema:
                 $ref: '#/components/schemas/RewardInit'
           description: ''
+  /api/rewards/:
+    post:
+      operationId: rewards_create_2
+      tags:
+      - rewards
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RewardCreate'
+        required: true
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardInit'
+          description: ''
+  /api/rewards{id}/status:
+    get:
+      operationId: rewards_status_retrieve_2
+      description: Poll payment status — payer or flyer creator only.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - rewards
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RewardStatus'
+          description: ''
   /api/rewards/{id}/status:
     get:
       operationId: rewards_status_retrieve
@@ -339,6 +729,20 @@ paths:
       operationId: rewards_mine_list
       tags:
       - rewards
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RewardStatus'
+          description: ''
+  /api/rewardsmine:
+    get:
+      operationId: rewardsmine_list
+      tags:
+      - rewardsmine
       responses:
         '200':
           content:
@@ -509,6 +913,15 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Flyer'
+    PatchedProfileUpdate:
+      type: object
+      properties:
+        display_name:
+          type: string
+          maxLength: 120
+        phone:
+          type: string
+          maxLength: 32
     Pet:
       type: object
       properties:
@@ -786,6 +1199,11 @@ components:
         avatar_path:
           type: string
           maxLength: 512
+        avatar_url:
+          type: string
+          description: Fresh signed URL for the private avatar object ("" when none
+            / on failure).
+          readOnly: true
         google_id:
           type: string
           readOnly: true
@@ -794,6 +1212,7 @@ components:
           type: boolean
           readOnly: true
       required:
+      - avatar_url
       - email
       - email_verified
       - google_id

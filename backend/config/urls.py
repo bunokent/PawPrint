@@ -1,6 +1,8 @@
 """Root URL configuration — NO django.contrib.admin (admin is fully removed)."""
 
-from django.urls import include, path
+from django.conf import settings
+from django.urls import include, path, re_path
+from django.views.static import serve
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
 
 from apps.common.views import HealthView
@@ -20,3 +22,10 @@ urlpatterns = [
     path("api/schema", SpectacularAPIView.as_view(), name="schema"),
     path("api/docs", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
 ]
+
+# Serve filesystem media when PAWPRINT_TESTING=1 (DEBUG=0 there) so Playwright e2e can
+# load signed /media/ URLs from local storage; in production Cloudinary serves them.
+if settings.TESTING:
+    urlpatterns += [
+        re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+    ]

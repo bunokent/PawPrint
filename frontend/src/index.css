@@ -135,6 +135,13 @@ a.card:hover, .card--link:hover { transform: translateY(-2px); box-shadow: var(-
 .input-eye:hover { color: var(--color-ink); background: var(--color-surface); }
 .input-eye:focus-visible { outline: 3px solid var(--color-amber); outline-offset: 1px; }
 
+/* Round profile picture + initial fallback */
+.avatar { border-radius: 999px; object-fit: cover; border: 1.5px solid var(--color-line); flex-shrink: 0; }
+.avatar--fallback {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--color-surface); color: var(--color-ink); font-weight: 700;
+}
+
 /* Skeleton / empty / error states */
 .skeleton { border-radius: var(--radius-md); background: linear-gradient(90deg, var(--color-surface) 25%, #fff 50%, var(--color-surface) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }

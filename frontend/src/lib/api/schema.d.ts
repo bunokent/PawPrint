@@ -4,6 +4,23 @@
  */
 
 export interface paths {
+    "/api/auth/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/auth/avatar — profile picture upload (10/min, no pet gate). */
+        post: operations["auth_avatar_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/google/callback": {
         parameters: {
             query?: never;
@@ -84,6 +101,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /api/auth/profile — update display_name and/or phone. */
+        patch: operations["auth_profile_partial_update"];
+        trace?: never;
+    };
     "/api/auth/register": {
         parameters: {
             query?: never;
@@ -94,6 +128,136 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth_register_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authavatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/auth/avatar — profile picture upload (10/min, no pet gate). */
+        post: operations["authavatar_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authgoogle/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authgoogle_callback_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authgoogle/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authgoogle_url_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authlogin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authlogin_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authlogout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authlogout_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authme": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["authme_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/authprofile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** @description PATCH /api/auth/profile — update display_name and/or phone. */
+        patch: operations["authprofile_partial_update"];
+        trace?: never;
+    };
+    "/api/authregister": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["authregister_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -115,6 +279,58 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/flyers/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public gallery — Guest Mode allowed. Cursor-paginated, FTS + mode filter. */
+        get: operations["flyers_list_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flyers{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Public flyer detail — Guest Mode allowed (QR scanners land here). */
+        get: operations["flyers_retrieve_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flyers{id}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly). */
+        delete: operations["flyers_edit_destroy_2"];
+        options?: never;
+        head?: never;
+        /** @description PATCH/DELETE restricted to the creator (IsOwnerOrReadOnly). */
+        patch: operations["flyers_edit_partial_update_2"];
         trace?: never;
     };
     "/api/flyers/{id}": {
@@ -185,6 +401,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/flyersmine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Authenticated user's own flyers (active + resolved). */
+        get: operations["flyersmine_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/flyersnew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["flyersnew_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -218,6 +467,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/pets/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["pets_create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pets/photos": {
         parameters: {
             query?: never;
@@ -235,6 +500,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/petsphotos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description POST /api/pets/photos — YOLO-World-gated pet photo upload (10/min). */
+        post: operations["petsphotos_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rewards": {
         parameters: {
             query?: never;
@@ -245,6 +527,39 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["rewards_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewards/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rewards_create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewards{id}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Poll payment status — payer or flyer creator only. */
+        get: operations["rewards_status_retrieve_2"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -276,6 +591,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["rewards_mine_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/rewardsmine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["rewardsmine_list"];
         put?: never;
         post?: never;
         delete?: never;
@@ -354,6 +685,10 @@ export interface components {
              */
             previous?: string | null;
             results: components["schemas"]["Flyer"][];
+        };
+        PatchedProfileUpdate: {
+            display_name?: string;
+            phone?: string;
         };
         Pet: {
             /** Format: uuid */
@@ -473,6 +808,8 @@ export interface components {
             display_name?: string;
             phone?: string;
             avatar_path?: string;
+            /** @description Fresh signed URL for the private avatar object ("" when none / on failure). */
+            readonly avatar_url: string;
             readonly google_id: string | null;
             readonly email_verified: boolean;
         };
@@ -485,6 +822,25 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    auth_avatar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
     auth_google_callback_create: {
         parameters: {
             query?: never;
@@ -598,7 +954,214 @@ export interface operations {
             };
         };
     };
+    auth_profile_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProfileUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProfileUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedProfileUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
     auth_register_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Register"];
+                "application/x-www-form-urlencoded": components["schemas"]["Register"];
+                "multipart/form-data": components["schemas"]["Register"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    authavatar_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    authgoogle_callback_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleCallback"];
+                "application/x-www-form-urlencoded": components["schemas"]["GoogleCallback"];
+                "multipart/form-data": components["schemas"]["GoogleCallback"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    authgoogle_url_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GoogleUrl"];
+                "application/x-www-form-urlencoded": components["schemas"]["GoogleUrl"];
+                "multipart/form-data": components["schemas"]["GoogleUrl"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    authlogin_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Login"];
+                "application/x-www-form-urlencoded": components["schemas"]["Login"];
+                "multipart/form-data": components["schemas"]["Login"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    authlogout_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    authme_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    authprofile_partial_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["PatchedProfileUpdate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PatchedProfileUpdate"];
+                "multipart/form-data": components["schemas"]["PatchedProfileUpdate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+        };
+    };
+    authregister_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -644,6 +1207,90 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaginatedFlyerList"];
                 };
+            };
+        };
+    };
+    flyers_list_2: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFlyerList"];
+                };
+            };
+        };
+    };
+    flyers_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    flyers_edit_destroy_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    flyers_edit_partial_update_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -749,6 +1396,48 @@ export interface operations {
             };
         };
     };
+    flyersmine_list: {
+        parameters: {
+            query?: {
+                /** @description The pagination cursor value. */
+                cursor?: string;
+                /** @description Number of results to return per page. */
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFlyerList"];
+                };
+            };
+        };
+    };
+    flyersnew_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     health_retrieve: {
         parameters: {
             query?: never;
@@ -795,7 +1484,51 @@ export interface operations {
             };
         };
     };
+    pets_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PetCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["PetCreate"];
+                "multipart/form-data": components["schemas"]["PetCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Pet"];
+                };
+            };
+        };
+    };
     pets_photos_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PhotoUploadResponse"];
+                };
+            };
+        };
+    };
+    petsphotos_create: {
         parameters: {
             query?: never;
             header?: never;
@@ -839,6 +1572,52 @@ export interface operations {
             };
         };
     };
+    rewards_create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RewardCreate"];
+                "application/x-www-form-urlencoded": components["schemas"]["RewardCreate"];
+                "multipart/form-data": components["schemas"]["RewardCreate"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardInit"];
+                };
+            };
+        };
+    };
+    rewards_status_retrieve_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardStatus"];
+                };
+            };
+        };
+    };
     rewards_status_retrieve: {
         parameters: {
             query?: never;
@@ -861,6 +1640,25 @@ export interface operations {
         };
     };
     rewards_mine_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewardStatus"][];
+                };
+            };
+        };
+    };
+    rewardsmine_list: {
         parameters: {
             query?: never;
             header?: never;

@@ -13,6 +13,7 @@ export const mockUser = (overrides: Partial<User> = {}): User => ({
   display_name: "Mia",
   phone: "",
   avatar_path: "",
+  avatar_url: "",
   google_id: null,
   email_verified: true,
   ...overrides,
@@ -116,6 +117,21 @@ export const handlers = [
   }),
 
   http.post("*/api/auth/logout", () => HttpResponse.json({ status: "logged_out" })),
+
+  http.patch("*/api/auth/profile", async ({ request }) => {
+    const body = (await request.json()) as Partial<User>;
+    return HttpResponse.json(mockUser(body));
+  }),
+
+  // NOTE: do not parse the multipart body here — undici cannot read jsdom FormData.
+  http.post("*/api/auth/avatar", () =>
+    HttpResponse.json(
+      mockUser({
+        avatar_path: "avatars/11111111-1111-1111-1111-111111111111/a1b2c3.jpg",
+        avatar_url: "http://localhost:8000/media/avatars/11111111-1111-1111-1111-111111111111/a1b2c3.jpg",
+      }),
+    ),
+  ),
 
   http.post("*/api/auth/google/url", () =>
     HttpResponse.json({ url: "https://accounts.google.com/o/oauth2/v2/auth?client_id=dev-google-client-id&redirect_uri=http%3A%2F%2Flocalhost%3A5173%2Fauth%2Flogin" }),

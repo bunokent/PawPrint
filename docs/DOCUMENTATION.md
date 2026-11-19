@@ -96,7 +96,9 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 | `POST /api/auth/register` | Guest | Create unified account (email) |
 | `POST /api/auth/login` | Guest | HttpOnly session + CSRF cookie |
 | `POST /api/auth/logout` | Auth | End session |
-| `GET /api/auth/me` | Any | Profile or 401 |
+| `GET /api/auth/me` | Any | Profile incl. signed `avatar_url`, or 401 |
+| `PATCH /api/auth/profile` | Auth | Update `display_name` / `phone` |
+| `POST /api/auth/avatar` | Auth | Profile picture upload (10/min, no pet gate) |
 | `GET /api/auth/google/url` + `POST /api/auth/google/callback` | Guest | Google/Gmail OAuth 2.0 |
 | `GET /api/flyers` | Guest | Cursor-paginated gallery, FTS `?q=`, mode filter `?mode=` |
 | `GET /api/flyers/{id}` | Guest | Public flyer detail (QR scan landing) |
@@ -123,6 +125,16 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 - Auth mutations are rate-limited to 20/min (`auth_write` scope; 429 on the 21st request).
 - Guests hitting an auth-only endpoint get 401 with `error.session_expired: true`
   (`SessionAuthenticationWith401`), which the SPA uses to reset the auth store.
+- **Profile settings**: `PATCH /api/auth/profile` updates `display_name`/`phone`
+  (partial, validated by `ProfileUpdateSerializer`) via `AuthService.update_profile`.
+  `POST /api/auth/avatar` stores a profile picture — deliberately **without** the
+  YOLO-World pet gate (it is the user's own photo, not a pet photo): Pillow-validated,
+  ≤5 MB, EXIF-stripped, re-encoded as a ≤512px JPEG into private storage under
+  `avatars/{user_id}/{uuid}.jpg`, old avatar object deleted best-effort
+  (`AuthService.update_avatar`, `upload` throttle 10/min). `UserSerializer` exposes
+  `avatar_path` plus a fresh signed `avatar_url` on every response, so the SPA always
+  has a valid link to the private object. Under `PAWPRINT_TESTING=1` (DEBUG=0) the
+  root urls serve filesystem `/media/` explicitly so e2e can load those URLs.
 
 ## 7. Flyers, QR & A4 Export
 
@@ -224,7 +236,11 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   reward checkout, `/builder` 3-step wizard (photo gate → pet form → details/reward; going
   back to the photo step with an uploaded photo shows a **Next** button to continue without
   re-uploading), `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login` (also
-  handles the Google `?code=` callback), `/auth/register`. Auth forms use icon inputs
+  handles the Google `?code=` callback), `/auth/register`, `/settings` (profile settings:
+  avatar upload with local preview + `PATCH /api/auth/profile` for display name/phone,
+  read-only email). The header nav links the avatar + display name to `/settings`
+  (`components/Avatar.tsx` renders the round picture with an initial-letter fallback).
+  Auth forms use icon inputs
   (`IconInput` in `components/ui/field.tsx`): a Mail icon on email fields, a Lock icon
   plus an Eye/EyeOff **show/hide password toggle** (a real button with an accessible name
   and `aria-pressed`) on password fields via `PasswordInput`, a User icon on the
@@ -249,7 +265,7 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 ## 11. Testing & Coverage
 
 - Backend: `cd backend && .venv/bin/python -m pytest tests/ -q --cov=apps --cov-fail-under=80`
-  → **121 passed, 94.77% total** (100% on all `services.py`, `drivers.py`,
+  → **136 passed, 95.03% total** (100% on all `services.py`, `drivers.py`,
   `apps/vision/services.py`, and the Cloudinary storage driver);
   `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
   `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
@@ -259,24 +275,31 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   fallback, non-World checkpoint rejection, rabbit/fox/frog/crocodile renaming from wrong raw
   labels, CLIP animal-gate fallback for YOLO misses, CLIP singleton/loader paths, ambiguous
   multi-species editability); Cloudinary driver unit tests (SDK mocked, 100% on the driver);
-  `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
-- Frontend: `npm run test:run` → **70 Vitest tests, 6 files** (RTL + MSW, jsdom), including
+  profile/avatar tests (PATCH partial + validation, avatar 400s for missing/non-image/oversize
+  file, EXIF-stripped ≤512px JPEG stored privately, old object deleted best-effort, signed
+  `avatar_url`, signing-failure fallback); `responses`/MockTransport for Stripe/PayMongo HTTP;
+  `factory-boy` factories.
+- Frontend: `npm run test:run` → **80 Vitest tests, 7 files** (RTL + MSW, jsdom), including
   drag-and-drop, real Axios upload-progress callbacks, all four live processing labels, the animated
   indeterminate bar, refined-`pet_classes` species selection (rabbit over raw `cat`), ambiguous-species
-  editability, and successful completion;
-  `npm run test:coverage` → **88.12% stmts / 81.31% branches / 84.21% funcs / 89.18% lines**
+  editability, builder Next-after-back navigation, auth field icons + password visibility toggle,
+  Google brand icon colours, and the settings page (guest redirect, profile save, avatar upload
+  success/failure, initial fallback);
+  `npm run test:coverage` → **88.41% stmts / 80.83% branches / 84.76% funcs / 89.38% lines**
   (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
   `npx tsc -b --noEmit` clean; `npm run build` green.
-- E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **6 journeys /
-  7 tests, all green**, fully self-contained: a stub PayMongo API (`e2e/stub-paymongo.mjs` on
+- E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **7 journeys /
+  8 tests, all green**, fully self-contained: a stub PayMongo API (`e2e/stub-paymongo.mjs` on
   :9100), the Django backend on :8010 with `PAWPRINT_TESTING=1` (eager Celery, locmem, local
-  PG :5433), and the Vite dev server on :5173 proxying to :8010. Journeys: ① guest browse →
+  PG :5433; filesystem `/media/` is served explicitly under TESTING so signed URLs load),
+  and the Vite dev server on :5173 proxying to :8010. Journeys: ① guest browse →
   filter → search → detail+QR, ② register → logout → login (demo account), ③ create an
   emergency flyer through the 3-step wizard (YOLO-World-gated upload) → public detail page,
   ④ landscape photo → 422 `no_pet_detected` retry UX → dog photo passes, ⑤ GCash reward
   checkout → QR modal → HMAC-signed PayMongo webhook flips status to `succeeded` (and a
   forged signature is 400), ⑥ open the flyer's `qr_target_value` like a scanner → public
-  detail page with SVG QR.
+  detail page with SVG QR, ⑦ profile settings → avatar upload + display name/phone save →
+  header avatar, profile restored afterwards.
 - Static analysis: `mypy apps`, `ruff check apps`, `npm run build` (0 TS errors).
 - Performance spot-check (Phase 7, local PG :5433): `EXPLAIN ANALYZE` on the public gallery
   query shows an index scan on `flyer_status_created_idx` + PK lookups for pet/owner/creator —
@@ -493,7 +516,25 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   `aria-label` + `aria-pressed`) on both `/auth/login` and `/auth/register`
   (`IconInput` in `components/ui/field.tsx`, `PasswordInput.tsx`, `GoogleButton.tsx`).
   Verified: **74 Vitest** tests green, `tsc -b` clean.
+- **Phase 19** — Profile settings page (`/settings`): backend `PATCH /api/auth/profile`
+  (display_name/phone, `ProfileUpdateSerializer` + `AuthService.update_profile`) and
+  `POST /api/auth/avatar` — a profile-picture pipeline deliberately **without** the
+  YOLO-World pet gate (it is the user's own photo): Pillow-validated, ≤5 MB,
+  EXIF-stripped, re-encoded as a ≤512px JPEG into private storage
+  (`avatars/{user_id}/{uuid}.jpg`), old avatar deleted best-effort, `upload` throttle
+  10/min (`AvatarUploadView` + `AuthService.update_avatar`).
+  `UserSerializer` now also returns a fresh signed `avatar_url` (empty string on failure);
+  schema.yml regenerated + `npm run typegen`. Frontend: `SettingsPage` (avatar card with
+  local preview + account form with read-only email), `Avatar` component (round picture,
+  initial-letter fallback), header nav link with avatar + name, `authApi.updateProfile` /
+  `uploadAvatar`, MSW handlers. Under `PAWPRINT_TESTING=1` the root urls serve filesystem
+  `/media/` explicitly so e2e loads signed URLs (prod uses Cloudinary). E2E journey ⑦
+  covers avatar upload + profile save and restores the seeded demo profile afterwards.
+  Verified: **136 pytest passed @ 95.03%** (`apps/users` services/serializers 100%),
+  **80 Vitest** @ 88.41/80.83/84.76/89.38, **8/8 Playwright** (7 journeys), ruff + mypy +
+  `tsc -b` + `vite build` clean.
 
-**Final status:** backend **121 passed @ 94.77%** (100% services/drivers/vision/storage);
-frontend **70 vitest tests** @ 88.12/81.31/84.21/89.18 (rewards 100%) + **7 Playwright tests
-green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
+**Final status:** backend **136 passed @ 95.03%** (100% services/drivers/vision/storage);
+frontend **80 vitest tests** @ 88.41/80.83/84.76/89.38 (rewards 100%) + **8 Playwright tests
+green** (7 journeys); `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf`
+regenerated.

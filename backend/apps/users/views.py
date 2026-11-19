@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.common.throttles import AuthWriteThrottle
+from apps.common.throttles import AuthWriteThrottle, UploadThrottle
 
 from .models import User
 from .selectors import get_user_by_id
@@ -17,10 +18,11 @@ from .serializers import (
     GoogleCallbackSerializer,
     GoogleUrlSerializer,
     LoginSerializer,
+    ProfileUpdateSerializer,
     RegisterSerializer,
     UserSerializer,
 )
-from .services import AuthError, AuthService, google_authorize_url
+from .services import AuthError, AuthService, ProfileError, google_authorize_url
 
 
 class RegisterView(APIView):
@@ -72,6 +74,49 @@ class MeView(APIView):
     def get(self, request: Request) -> Response:
         user = request.user
         assert isinstance(user, User)
+        return Response(UserSerializer(user).data)
+
+
+class ProfileView(APIView):
+    """PATCH /api/auth/profile — update display_name and/or phone."""
+
+    permission_classes = [IsAuthenticated]
+
+    @extend_schema(request=ProfileUpdateSerializer, responses={200: UserSerializer})
+    def patch(self, request: Request) -> Response:
+        serializer = ProfileUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        user = request.user
+        assert isinstance(user, User)
+        user = AuthService.update_profile(user, **serializer.validated_data)
+        return Response(UserSerializer(user).data)
+
+
+class AvatarUploadView(APIView):
+    """POST /api/auth/avatar — profile picture upload (10/min, no pet gate)."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [UploadThrottle]
+    throttle_scope = "upload"
+    parser_classes = [MultiPartParser, FormParser]
+
+    @extend_schema(responses={200: UserSerializer})
+    def post(self, request: Request) -> Response:
+        upload = request.FILES.get("avatar")
+        if upload is None:
+            return Response(
+                {"error": {"code": "validation_error", "message": "Field 'avatar' is required."}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        user = request.user
+        assert isinstance(user, User)
+        try:
+            user = AuthService.update_avatar(user, upload.name or "avatar.jpg", upload.read())
+        except ProfileError as exc:
+            return Response(
+                {"error": {"code": "validation_error", "message": str(exc)}},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         return Response(UserSerializer(user).data)
 
 

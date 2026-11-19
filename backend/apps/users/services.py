@@ -1,4 +1,4 @@
-"""AuthService — registration, login, logout and Google/Gmail OAuth 2.0.
+"""AuthService — registration, login, logout, Google/Gmail OAuth 2.0 and profile updates.
 
 All writes are transactional. Google sign-in supports one-click Gmail registration,
 linking an existing email account, and existing Google sign-in, via django-allauth's
@@ -7,7 +7,9 @@ SocialLogin completion machinery.
 
 from __future__ import annotations
 
+import io
 import logging
+import uuid
 
 import httpx
 from allauth.socialaccount.models import SocialAccount
@@ -15,6 +17,10 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.db import transaction
 from django.http import HttpRequest
+from PIL import Image
+
+from apps.common import storage
+from apps.vision.services import PetDetectionService
 
 from .dto import AuthResult, GoogleProfile
 from .models import User
@@ -25,9 +31,16 @@ logger = logging.getLogger(__name__)
 GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 
+MAX_AVATAR_BYTES = 5 * 1024 * 1024
+AVATAR_MAX_SIZE = (512, 512)
+
 
 class AuthError(Exception):
     """Authentication failure with a client-safe message."""
+
+
+class ProfileError(Exception):
+    """Profile update failure with a client-safe message."""
 
 
 def google_authorize_url(redirect_uri: str) -> str:
@@ -105,6 +118,53 @@ class AuthService:
     @staticmethod
     def logout(request: HttpRequest) -> None:
         logout(request)
+
+    @staticmethod
+    @transaction.atomic
+    def update_profile(user: User, *, display_name: str | None = None, phone: str | None = None) -> User:
+        """Update display_name and/or phone; None leaves the field unchanged."""
+        update_fields: list[str] = []
+        if display_name is not None:
+            user.display_name = display_name.strip()
+            update_fields.append("display_name")
+        if phone is not None:
+            user.phone = phone.strip()
+            update_fields.append("phone")
+        if update_fields:
+            user.save(update_fields=update_fields)  # type: ignore[arg-type]
+        return user
+
+    @staticmethod
+    def update_avatar(user: User, filename: str, image_bytes: bytes) -> User:
+        """Store a profile picture — NO pet gate, it is the user's own photo.
+
+        The image is validated with Pillow, EXIF-stripped, re-encoded as a ≤512px
+        JPEG and written to private storage; the previous avatar object is deleted
+        best-effort after the swap.
+        """
+        del filename  # only the bytes matter; the stored object is always a JPEG
+        if len(image_bytes) > MAX_AVATAR_BYTES:
+            raise ProfileError("Profile pictures must be 5 MB or smaller.")
+        try:
+            image = Image.open(io.BytesIO(image_bytes))
+            image.verify()
+        except Exception:
+            raise ProfileError("That file is not a readable image. Please choose a JPG or PNG.") from None
+        clean = PetDetectionService.make_thumbnail(
+            PetDetectionService.strip_exif(image_bytes), size=AVATAR_MAX_SIZE
+        )
+        key = f"avatars/{user.pk}/{uuid.uuid4()}.jpg"
+        storage.upload_bytes(key, clean, content_type="image/jpeg")
+        old_key = user.avatar_path
+        with transaction.atomic():
+            user.avatar_path = key
+            user.save(update_fields=["avatar_path"])
+        if old_key and old_key != key:
+            try:
+                storage.get_storage().delete(old_key)
+            except Exception:
+                logger.warning("Could not delete old avatar object %s", old_key)
+        return user
 
     @staticmethod
     @transaction.atomic
