@@ -3,12 +3,14 @@ import { Link, useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Mail, UserRound } from "lucide-react";
 import { authApi } from "@/features/auth/api";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
-import { FieldShell, Input } from "@/components/ui/field";
+import { FieldShell, IconInput } from "@/components/ui/field";
 import { GoogleButton } from "@/features/auth/components/GoogleButton";
+import { PasswordInput } from "@/features/auth/components/PasswordInput";
 
 const registerSchema = z.object({
   display_name: z.string().max(120, "Keep it under 120 characters.").optional().or(z.literal("")),
@@ -78,14 +80,21 @@ export function RegisterPage() {
             noValidate
           >
             <FieldShell label="Display name (optional)" htmlFor="reg-name" error={form.formState.errors.display_name?.message}>
-              <Input id="reg-name" type="text" autoComplete="name" {...form.register("display_name")} />
+              <IconInput
+                id="reg-name"
+                type="text"
+                autoComplete="name"
+                icon={<UserRound size={18} strokeWidth={1.8} />}
+                {...form.register("display_name")}
+              />
             </FieldShell>
             <FieldShell label="Email" htmlFor="reg-email" error={form.formState.errors.email?.message}>
-              <Input
+              <IconInput
                 id="reg-email"
                 type="email"
                 autoComplete="email"
                 aria-invalid={Boolean(form.formState.errors.email)}
+                icon={<Mail size={18} strokeWidth={1.8} />}
                 {...form.register("email")}
               />
             </FieldShell>
@@ -95,9 +104,8 @@ export function RegisterPage() {
               hint="At least 8 characters."
               error={form.formState.errors.password?.message}
             >
-              <Input
+              <PasswordInput
                 id="reg-password"
-                type="password"
                 autoComplete="new-password"
                 aria-invalid={Boolean(form.formState.errors.password)}
                 {...form.register("password")}

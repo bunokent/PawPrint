@@ -224,7 +224,12 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   reward checkout, `/builder` 3-step wizard (photo gate → pet form → details/reward; going
   back to the photo step with an uploaded photo shows a **Next** button to continue without
   re-uploading), `/my-flyers`, `/rewards/success`, `/rewards/cancel`, `/auth/login` (also
-  handles the Google `?code=` callback), `/auth/register`.
+  handles the Google `?code=` callback), `/auth/register`. Auth forms use icon inputs
+  (`IconInput` in `components/ui/field.tsx`): a Mail icon on email fields, a Lock icon
+  plus an Eye/EyeOff **show/hide password toggle** (a real button with an accessible name
+  and `aria-pressed`) on password fields via `PasswordInput`, a User icon on the
+  display-name field, and the official multicolor Google "G" brand mark on the
+  `GoogleButton` sign-in button.
 - React 19 idioms: `useActionState` forms (dispatch wrapped in `startTransition` so `pending`
   works), `useOptimistic` publishing card on flyer create, ref-as-prop, React Compiler in
   `vite.config.ts` (disabled under Vitest so coverage maps to source). TanStack Query
@@ -482,6 +487,12 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   already-uploaded photo now shows a **Next** button, so continuing never requires
   re-uploading (`BuilderWizard.tsx` `StepPhotoMode` + `onNext`). Regression test walks
   upload → back → Next. Verified: **71 Vitest** tests green, `tsc -b` clean.
+- **Phase 18** — Auth form icons: the Google sign-in button now carries the official
+  multicolor "G" brand mark; email fields get a Mail icon, display name a User icon, and
+  password fields a Lock icon plus an Eye/EyeOff show/hide toggle (accessible button with
+  `aria-label` + `aria-pressed`) on both `/auth/login` and `/auth/register`
+  (`IconInput` in `components/ui/field.tsx`, `PasswordInput.tsx`, `GoogleButton.tsx`).
+  Verified: **74 Vitest** tests green, `tsc -b` clean.
 
 **Final status:** backend **121 passed @ 94.77%** (100% services/drivers/vision/storage);
 frontend **70 vitest tests** @ 88.12/81.31/84.21/89.18 (rewards 100%) + **7 Playwright tests

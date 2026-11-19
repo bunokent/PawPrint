@@ -119,6 +119,22 @@ a.card:hover, .card--link:hover { transform: translateY(-2px); box-shadow: var(-
 .input[aria-invalid="true"], .textarea[aria-invalid="true"] { border-color: var(--color-emergency); }
 .field-error { font-size: 13px; color: var(--color-emergency-deep); }
 
+/* Input with leading icon / trailing adornment (e.g. password eye toggle) */
+.input-wrap { position: relative; display: flex; align-items: center; }
+.input-icon { position: absolute; display: inline-flex; align-items: center; color: var(--color-muted); }
+.input-icon--start { left: 13px; pointer-events: none; }
+.input-icon--end { right: 6px; }
+.input--has-start { padding-left: 42px; }
+.input--has-end { padding-right: 46px; }
+.input-eye {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px; border: none; border-radius: var(--radius-sm);
+  background: transparent; color: var(--color-muted); cursor: pointer;
+  transition: color 150ms ease, background-color 150ms ease;
+}
+.input-eye:hover { color: var(--color-ink); background: var(--color-surface); }
+.input-eye:focus-visible { outline: 3px solid var(--color-amber); outline-offset: 1px; }
+
 /* Skeleton / empty / error states */
 .skeleton { border-radius: var(--radius-md); background: linear-gradient(90deg, var(--color-surface) 25%, #fff 50%, var(--color-surface) 75%); background-size: 200% 100%; animation: shimmer 1.4s infinite; }
 @keyframes shimmer { to { background-position: -200% 0; } }

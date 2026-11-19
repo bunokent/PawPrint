@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach, vi } from "vitest";
 import { http, HttpResponse } from "msw";
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { LoginPage } from "@/features/auth/pages/LoginPage";
 import { RegisterPage } from "@/features/auth/pages/RegisterPage";
@@ -45,6 +45,21 @@ describe("LoginPage", () => {
     await user.click(screen.getByRole("button", { name: "Log in" }));
     expect(await screen.findAllByRole("alert")).not.toHaveLength(0);
     expect(screen.queryByText("HOME PAGE")).not.toBeInTheDocument();
+  });
+
+  it("shows a mail icon on email, a lock icon on password, and an eye toggle", async () => {
+    const user = userEvent.setup();
+    renderLogin();
+    const email = screen.getByLabelText("Email");
+    expect(email.closest(".input-wrap")?.querySelector("svg.lucide-mail")).toBeTruthy();
+    const password = screen.getByLabelText("Password");
+    expect(password).toHaveAttribute("type", "password");
+    expect(password.closest(".input-wrap")?.querySelector("svg.lucide-lock")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "text");
+    await user.click(screen.getByRole("button", { name: "Hide password" }));
+    expect(screen.getByLabelText("Password")).toHaveAttribute("type", "password");
   });
 
   it("exchanges a Google ?code= callback for a session", async () => {
@@ -104,9 +119,28 @@ describe("RegisterPage", () => {
     await user.click(screen.getByRole("button", { name: "Create account" }));
     expect(await screen.findByText("Use at least 8 characters.")).toBeInTheDocument();
   });
+
+  it("toggles password visibility with the eye button", async () => {
+    const user = userEvent.setup();
+    renderRegister();
+    const password = screen.getByLabelText(/Password/);
+    expect(password).toHaveAttribute("type", "password");
+    await user.click(screen.getByRole("button", { name: "Show password" }));
+    expect(screen.getByLabelText(/Password/)).toHaveAttribute("type", "text");
+  });
 });
 
 describe("GoogleButton", () => {
+  it("renders the real multicolor Google brand icon on the sign-in button", () => {
+    renderWithProviders(<GoogleButton />);
+    const button = screen.getByRole("button", { name: /Continue with Google/ });
+    const icon = within(button).getByTestId("google-brand-icon");
+    expect(icon).toBeInTheDocument();
+    // The official "G" keeps its four brand colours.
+    const fills = Array.from(icon.querySelectorAll("path")).map((p) => p.getAttribute("fill"));
+    expect(fills).toEqual(["#FFC107", "#FF3D00", "#4CAF50", "#1976D2"]);
+  });
+
   it("requests the authorize URL and redirects", async () => {
     const urlCalls = vi.fn();
     mswServer.use(

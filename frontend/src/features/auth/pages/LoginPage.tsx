@@ -3,12 +3,14 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { Mail } from "lucide-react";
 import { authApi, REDIRECT_URI } from "@/features/auth/api";
 import { ApiError } from "@/lib/api/client";
 import { useAuth } from "@/stores/auth";
 import { Button } from "@/components/ui/button";
-import { FieldShell, Input } from "@/components/ui/field";
+import { FieldShell, IconInput } from "@/components/ui/field";
 import { GoogleButton } from "@/features/auth/components/GoogleButton";
+import { PasswordInput } from "@/features/auth/components/PasswordInput";
 
 const loginSchema = z.object({
   email: z.email("Enter a valid email address."),
@@ -90,18 +92,18 @@ export function LoginPage() {
             noValidate
           >
             <FieldShell label="Email" htmlFor="login-email" error={form.formState.errors.email?.message}>
-              <Input
+              <IconInput
                 id="login-email"
                 type="email"
                 autoComplete="email"
                 aria-invalid={Boolean(form.formState.errors.email)}
+                icon={<Mail size={18} strokeWidth={1.8} />}
                 {...form.register("email")}
               />
             </FieldShell>
             <FieldShell label="Password" htmlFor="login-password" error={form.formState.errors.password?.message}>
-              <Input
+              <PasswordInput
                 id="login-password"
-                type="password"
                 autoComplete="current-password"
                 aria-invalid={Boolean(form.formState.errors.password)}
                 {...form.register("password")}

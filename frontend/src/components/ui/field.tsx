@@ -1,4 +1,4 @@
-import type { InputHTMLAttributes, TextareaHTMLAttributes } from "react";
+import type { InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from "react";
 import { cn } from "@/lib/utils";
 
 interface FieldProps {
@@ -20,6 +20,34 @@ export function FieldShell({ label, error, hint, children, htmlFor }: FieldProps
 
 export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input className={cn("input")} {...props} />;
+}
+
+interface IconInputProps extends InputHTMLAttributes<HTMLInputElement> {
+  /** Leading icon, e.g. Mail/Lock — decorative, hidden from assistive tech. */
+  icon?: ReactNode;
+  /** Trailing adornment, e.g. the password visibility toggle button. */
+  trailing?: ReactNode;
+}
+
+/** Input with an optional leading icon and trailing adornment (eye toggle). */
+export function IconInput({ icon, trailing, className, ...props }: IconInputProps) {
+  if (!icon && !trailing) {
+    return <input className={cn("input", className)} {...props} />;
+  }
+  return (
+    <div className="input-wrap">
+      {icon && (
+        <span className="input-icon input-icon--start" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <input
+        className={cn("input", icon && "input--has-start", trailing && "input--has-end", className)}
+        {...props}
+      />
+      {trailing && <span className="input-icon input-icon--end">{trailing}</span>}
+    </div>
+  );
 }
 
 export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
