@@ -1,0 +1,165 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Backend static analysis (no DB needed) ──────────────────────────────
+  backend-lint:
+    name: Backend lint (ruff + mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install dependencies
+        run: cd backend && uv venv && uv pip install '.[dev]'
+      - name: ruff
+        run: cd backend && .venv/bin/ruff check .
+      - name: mypy
+        run: cd backend && .venv/bin/mypy apps
+
+  # ── Backend pytest with coverage (needs PostgreSQL) ─────────────────────
+  backend-test:
+    name: Backend tests (pytest + coverage ≥80%)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pawprint
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Install dependencies
+        run: cd backend && uv venv && uv pip install '.[dev]'
+      - name: Run pytest
+        run: cd backend && .venv/bin/pytest --cov-fail-under=80 --cov-report=xml
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5432"
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pawprint
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.xml
+            backend/htmlcov/
+          retention-days: 7
+
+  # ── Frontend unit tests + type-check + build ────────────────────────────
+  frontend-test:
+    name: Frontend tests (vitest + tsc + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        run: cd frontend && npm ci
+      - name: Type-check (tsc)
+        run: cd frontend && npm run lint
+      - name: Vitest with coverage thresholds
+        run: cd frontend && npm run test:coverage
+      - name: Production build
+        run: cd frontend && npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-coverage
+          path: frontend/coverage/
+          retention-days: 7
+
+  # ── Playwright E2E (self-contained: PG + Django + Vite + PayMongo stub) ──
+  e2e:
+    name: E2E (Playwright, 7 journeys)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pawprint
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install system deps (pango for WeasyPrint)
+        run: sudo apt-get update && sudo apt-get install -y libpango-1.0-0 libpangoft2-1.0-0
+      - name: Install backend dependencies
+        run: cd backend && uv venv && uv pip install '.[dev]'
+      - name: Install frontend dependencies
+        run: cd frontend && npm ci
+      - name: Install Playwright chromium
+        run: cd frontend && npx playwright install --with-deps chromium
+      - name: Cache YOLO-World model weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/yolov8s-worldv2.pt
+            backend/weights/
+          key: yolo-weights-${{ hashFiles('backend/pyproject.toml') }}
+      - name: Migrate + seed demo database
+        run: |
+          cd backend
+          .venv/bin/python manage.py migrate --noinput
+          .venv/bin/python manage.py seed_demo
+        env:
+          PAWPRINT_TESTING: "1"
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PORT: "5433"
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: pawprint
+      - name: Run Playwright E2E
+        run: cd frontend && npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+          retention-days: 7

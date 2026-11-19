@@ -45,6 +45,12 @@ Playwright E2E covers the 6 critical journeys end-to-end.
   and Playwright E2E, `PAWPRINT_TESTING=1` (or running under pytest) switches to locmem
   cache, in-memory channel layer, eager Celery, `memory://` broker and filesystem storage —
   no Redis/Cloudinary needed.
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) runs four jobs on every push/PR to
+  `main`: `backend-lint` (ruff + mypy), `backend-test` (pytest `-n auto` with
+  `--cov-fail-under=80` against a `postgres:16` service), `frontend-test` (`npm ci` →
+  `tsc` → `vitest --coverage` with thresholds → `vite build`), and `e2e` (Playwright 7
+  journeys against a `postgres:16` service on :5433, with migrate + `seed_demo` and cached
+  YOLO-World weights). Coverage HTML/XML and Playwright reports upload as artifacts.
 
 ## 3. Access Model (Guest vs Registered — STRICT 2 Modes)
 
@@ -300,7 +306,13 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   forged signature is 400), ⑥ open the flyer's `qr_target_value` like a scanner → public
   detail page with SVG QR, ⑦ profile settings → avatar upload + display name/phone save →
   header avatar, profile restored afterwards.
-- Static analysis: `mypy apps`, `ruff check apps`, `npm run build` (0 TS errors).
+- Static analysis: `mypy apps`, `ruff check .`, `npm run lint` (tsc), `npm run build`
+  (0 TS errors). All of the above run in GitHub Actions (`.github/workflows/ci.yml`):
+  `backend-lint` (ruff + mypy, no DB), `backend-test` (pytest + coverage against a
+  `postgres:16` service container, coverage artifacts uploaded), `frontend-test`
+  (`npm ci` + tsc + vitest coverage thresholds + build), and `e2e` (Playwright with a
+  `postgres:16` service on :5433, migrate + seed_demo, cached YOLO-World weights,
+  Playwright report artifact). Runs on push/PR to `main` + manual dispatch.
 - Performance spot-check (Phase 7, local PG :5433): `EXPLAIN ANALYZE` on the public gallery
   query shows an index scan on `flyer_status_created_idx` + PK lookups for pet/owner/creator —
   **0.21 ms execution, 14 shared buffer hits** at seed scale; FTS uses the
@@ -534,7 +546,26 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   **80 Vitest** @ 88.41/80.83/84.76/89.38, **8/8 Playwright** (7 journeys), ruff + mypy +
   `tsc -b` + `vite build` clean.
 
+- **Phase 20** — GitHub Actions CI (`.github/workflows/ci.yml`), triggered on push/PR to
+  `main` + `workflow_dispatch`, with `cancel-in-progress` concurrency. Four jobs:
+  **backend-lint** — `astral-sh/setup-uv` (Python 3.12, cache enabled) → `uv venv` +
+  `uv pip install '.[dev]'` → `ruff check .` + `mypy apps` (no DB needed).
+  **backend-test** — `postgres:16` service on :5432 (health-checked) → same uv install →
+  `pytest --cov-fail-under=80 --cov-report=xml` (addopts already include `-n auto
+  --cov=apps --cov-report=term-missing`) with `POSTGRES_*` env pointing at the service;
+  coverage XML + HTML uploaded as artifact. **frontend-test** — `setup-node` 24 with npm
+  cache → `npm ci` → `npm run lint` (tsc) → `npm run test:coverage` (enforces 70% global
+  + 100% `features/rewards` thresholds from `vite.config.ts`) → `npm run build`;
+  coverage HTML uploaded. **e2e** — `postgres:16` service on :5433 (matching
+  `playwright.config.ts`) → pango system libs for WeasyPrint → backend uv venv at
+  `backend/.venv` (required by the Playwright webServer `cwd: ../backend`) → `npm ci` →
+  `npx playwright install --with-deps chromium` → cached YOLO-World weights
+  (`actions/cache` keyed on `pyproject.toml` hash) → `manage.py migrate` + `seed_demo`
+  with `PAWPRINT_TESTING=1` → `npm run test:e2e` (Playwright self-starts the Django
+  backend on :8010, PayMongo stub on :9100, and Vite on :5173) → report artifacts.
+  Docs §2/§11 updated.
+
 **Final status:** backend **136 passed @ 95.03%** (100% services/drivers/vision/storage);
 frontend **80 vitest tests** @ 88.41/80.83/84.76/89.38 (rewards 100%) + **8 Playwright tests
-green** (7 journeys); `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf`
-regenerated.
+green** (7 journeys); `ruff` + `mypy` clean; `tsc -b` + `vite build` green; GitHub Actions
+CI with 4 jobs (lint / backend-test / frontend-test / e2e); `npm run docs:pdf` regenerated.
