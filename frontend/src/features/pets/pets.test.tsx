@@ -35,7 +35,7 @@ describe("PhotoUpload (YOLO-World gatekeeper UX)", () => {
     renderWithProviders(<Harness spy={onUploaded} />);
     uploadFile("bento.jpg");
     expect(await screen.findByAltText("Uploaded pet preview")).toBeInTheDocument();
-    expect(screen.getByText("Pet detected ✓")).toBeInTheDocument();
+    expect(screen.getByText("Detected: dog ✓")).toBeInTheDocument();
     await waitFor(() =>
       expect(onUploaded).toHaveBeenCalledWith(expect.objectContaining({ key: "pets/photos/bento.jpg", pet_classes: ["dog"] })),
     );

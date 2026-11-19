@@ -207,6 +207,35 @@ describe("BuilderWizard", () => {
     expect(screen.queryByText(/Species auto-detected/)).not.toBeInTheDocument();
   });
 
+  it("uses the refined pet species name even when raw YOLO labels disagree", async () => {
+    useAuth.setState({ user: mockUser(), checked: true });
+    mswServer.use(
+      http.post("*/api/pets/photos", () =>
+        HttpResponse.json(
+          {
+            key: "pets/photos/rabbit.jpg",
+            url: "http://localhost:8000/media/pets/photos/rabbit.jpg",
+            thumb_key: "pets/photos/thumb_rabbit.jpg",
+            thumb_url: "http://localhost:8000/media/pets/photos/thumb_rabbit.jpg",
+            pet_classes: ["rabbit"],
+            detected_classes: ["cat"],
+            max_confidence: 0.85,
+          },
+          { status: 201 },
+        ),
+      ),
+    );
+    renderWithProviders(<BuilderWizard />, { route: "/builder?mode=emergency" });
+    fireEvent.change(screen.getByLabelText("Choose a pet photo"), {
+      target: { files: [new File(["img"], "rabbit.jpg", { type: "image/jpeg" })] },
+    });
+    await screen.findByRole("heading", { name: "Tell us about the pet" });
+    const species = screen.getByLabelText("Species");
+    expect(species).toHaveValue("other");
+    expect(species).toBeDisabled();
+    expect(screen.getByText(/Detected animal: Rabbit/)).toBeInTheDocument();
+  });
+
   it("blocks publish when the reward is enabled but empty", async () => {
     useAuth.setState({ user: mockUser(), checked: true });
     const user = userEvent.setup();

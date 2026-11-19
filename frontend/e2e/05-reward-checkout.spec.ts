@@ -11,7 +11,7 @@ test("GCash reward checkout + signed PayMongo webhook flips status to succeeded"
   await login(page);
 
   // Find the seeded emergency flyer (Bruno, ₱5,000 reward) via the public API.
-  const list = await apiFlyers(page, "?mode=emergency");
+  const list = await apiFlyers(page, "?mode=emergency&q=Bruno");
   const bruno = list.results.find((f) => f.pet?.name === "Bruno" && f.reward_amount_cents > 0);
   expect(bruno, "seeded Bruno flyer with a reward should exist").toBeTruthy();
 

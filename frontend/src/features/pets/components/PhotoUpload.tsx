@@ -228,7 +228,11 @@ export function PhotoUpload({ onUploaded, uploaded }: PhotoUploadProps) {
         >
           {isPending ? "Processing…" : uploaded ? "Choose a different photo" : "Choose a photo"}
         </Button>
-        {uploaded && !imageFailed && !isPending && <span className="badge badge--outreach">Pet detected ✓</span>}
+        {uploaded && !imageFailed && !isPending && (
+          <span className="badge badge--outreach">
+            {uploaded.pet_classes?.length ? `Detected: ${uploaded.pet_classes[0]} ✓` : "Pet detected ✓"}
+          </span>
+        )}
       </div>
 
       {noPet && (

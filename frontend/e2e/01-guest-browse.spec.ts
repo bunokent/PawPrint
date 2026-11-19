@@ -7,15 +7,15 @@ import { apiFlyers } from "./helpers";
  */
 test("guest can browse, filter, search and open a flyer", async ({ page }) => {
   // Seeded demo data: an emergency flyer for "Bruno" exists (see seed_demo).
-  const list = await apiFlyers(page, "?mode=emergency");
+  const list = await apiFlyers(page, "?mode=emergency&q=Bruno");
   const bruno = list.results.find((f) => f.pet?.name === "Bruno");
   expect(bruno, "seeded emergency flyer 'Bruno' should exist").toBeTruthy();
 
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /bring them home/i })).toBeVisible();
-  // Emergency rail on the home page renders the seeded flyer as a guest.
+  // The emergency rail renders as a guest; the seeded Bruno flyer is verified via
+  // the gallery search below so accumulated local flyers cannot reorder the rail.
   await expect(page.getByRole("heading", { name: "Lost right now" })).toBeVisible();
-  await expect(page.getByRole("link", { name: /Bruno/ }).first()).toBeVisible();
 
   // Gallery.
   await page.getByRole("link", { name: "Flyers" }).click();

@@ -113,13 +113,15 @@ def test_vision_model_str_and_max_conf_empty(monkeypatch):
     assert "PASS" in str(log)
 
     class FakeModel:
-        def predict(self, image, verbose=False):
+        def predict(self, image, conf=None, verbose=False):
             class R:
                 names = {}
                 boxes = None
             return [R()]
 
     monkeypatch.setattr("apps.vision.services._get_model", lambda: FakeModel())
+    monkeypatch.setattr("apps.vision.services._clip_animal_gate", lambda image: False)
+    monkeypatch.setattr("apps.vision.services._refine_species", lambda image, accepted: list(accepted))
     from apps.common.exceptions import NoPetDetectedError
 
     with pytest.raises(NoPetDetectedError):

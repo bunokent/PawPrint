@@ -34,7 +34,7 @@ class _FakeResult:
         self.boxes = boxes
 
 
-def _mock_model(monkeypatch, detections, label_overrides=None):
+def _mock_model(monkeypatch, detections, label_overrides=None, *, clip_rank=None, clip_gate=False):
     """detections: list of (cls_id, conf); label_overrides maps ids to open-vocabulary labels."""
     names = {i: f"cls{i}" for i in range(80)}
     names.update({14: "bird", 15: "cat", 16: "dog", 17: "horse", 18: "sheep", 19: "cow", 0: "person"})
@@ -42,10 +42,35 @@ def _mock_model(monkeypatch, detections, label_overrides=None):
     boxes = _FakeBoxes([c for c, _ in detections], [f for _, f in detections])
 
     class FakeModel:
-        def predict(self, image, verbose=False):
+        def __init__(self):
+            self.predict_calls = []
+
+        def predict(self, image, conf=None, verbose=False):
+            self.predict_calls.append({"conf": conf, "verbose": verbose, "image_size": image.size})
             return [_FakeResult(names, boxes)]
 
-    monkeypatch.setattr("apps.vision.services._get_model", lambda: FakeModel())
+    model = FakeModel()
+    monkeypatch.setattr("apps.vision.services._get_model", lambda: model)
+    if clip_rank is None:
+        refine = lambda image, accepted: list(accepted)  # noqa: E731
+    else:
+        refine = lambda image, accepted: _refine_from_rank(accepted, clip_rank)  # noqa: E731
+    monkeypatch.setattr("apps.vision.services._refine_species", refine)
+    monkeypatch.setattr("apps.vision.services._clip_animal_gate", lambda image: clip_gate)
+    return model
+
+
+def _refine_from_rank(accepted: list[str], rank: list[tuple[str, float]]) -> list[str]:
+    from apps.vision.services import ANIMAL_CATEGORY_BY_LABEL, CLIP_SPECIES_MIN_PROBABILITY
+
+    if not rank:
+        return list(accepted)
+    top_prob = rank[0][1]
+    min_prob = max(CLIP_SPECIES_MIN_PROBABILITY, top_prob * 0.5)
+    selected = [label for label, prob in rank if prob >= min_prob and label in ANIMAL_CATEGORY_BY_LABEL]
+    if selected:
+        return selected
+    return list(accepted)
 
 
 def test_detects_dog_passes(monkeypatch):
@@ -74,7 +99,7 @@ def test_non_pet_rejected_with_labels(monkeypatch):
 
 def test_malformed_model_result_is_ignored(monkeypatch):
     class FakeModel:
-        def predict(self, image, verbose=False):
+        def predict(self, image, conf=None, verbose=False):
             return [object()]
 
     monkeypatch.setattr("apps.vision.services._get_model", lambda: FakeModel())
@@ -93,6 +118,7 @@ def test_bird_counts_as_pet(monkeypatch):
         ("lion", "Zoo / Exotic"),
         ("crocodile", "Reptile"),
         ("sugar glider", "Small Mammal"),
+        ("rabbit", "Small Mammal"),
         ("goat", "Farm Animal"),
         ("cockatiel", "Bird"),
         ("goldfish", "Fish"),
@@ -101,11 +127,26 @@ def test_bird_counts_as_pet(monkeypatch):
 )
 def test_expanded_animal_labels_pass_at_point_twenty(monkeypatch, settings, label, category):
     settings.YOLO_CONFIDENCE_THRESHOLD = 0.20
-    _mock_model(monkeypatch, [(0, 0.20)], {0: label})
+    model = _mock_model(monkeypatch, [(0, 0.20)], {0: label})
     result = PetDetectionService().validate_pet_image(_img_bytes())
     assert result.passed is True
     assert result.pet_classes == [label]
     assert ANIMAL_CATEGORY_BY_LABEL[label] == category
+    assert model.predict_calls == [{"conf": 0.20, "verbose": False, "image_size": (32, 32)}]
+
+
+def test_validate_applies_exif_orientation_and_rgb_before_predict(monkeypatch, settings):
+    settings.YOLO_CONFIDENCE_THRESHOLD = 0.20
+    img = Image.new("RGBA", (40, 20), (200, 30, 30, 255))
+    exif = Image.Exif()
+    exif[274] = 6  # Orientation: rotate 90° CW when displayed.
+    buf = io.BytesIO()
+    img.save(buf, format="PNG", exif=exif)
+
+    model = _mock_model(monkeypatch, [(16, 0.20)], {16: "dog"})
+    assert PetDetectionService().validate_pet_image(buf.getvalue()).passed is True
+    assert model.predict_calls[0]["image_size"] == (20, 40)
+    assert model.predict_calls[0]["conf"] == 0.20
 
 
 @pytest.mark.parametrize(
@@ -170,3 +211,175 @@ def test_record_detection(user):
     assert isinstance(log, PetDetectionLog)
     assert log.passed is True
     assert log.user == user
+
+
+# ---------------------------------------------------------------------------
+# CLIP second-stage species naming (YOLO-World stays the gate; CLIP names the animal)
+# ---------------------------------------------------------------------------
+class _FakeClip:
+    def __init__(self, image_index: int = 0):
+        self.image_index = image_index
+
+    def tokenize(self, texts):
+        return list(texts)
+
+    def encode_text(self, tokens):
+        import torch
+
+        return torch.eye(len(tokens), 512)
+
+    def encode_image(self, image):
+        import torch
+
+        feat = torch.zeros(512)
+        feat[self.image_index % 512] = 1.0
+        return feat
+
+
+def test_clip_rank_names_rabbit_over_cat():
+    import apps.vision.services as svc
+
+    prompts, ranges = svc._build_clip_prompts()
+    fake = _FakeClip(ranges["rabbit"][0])
+    ranked = svc._clip_rank(Image.new("RGB", (8, 8)), fake)
+    assert ranked[0][0] == "rabbit"
+    assert ranked[0][1] > 0.99
+    assert all(label in ANIMAL_CATEGORY_BY_LABEL for label, _ in ranked)
+
+
+def test_clip_animal_gate_accepts_animal_and_rejects_non_animal():
+    import apps.vision.services as svc
+
+    image = Image.new("RGB", (8, 8))
+    assert svc._clip_animal_gate(image, _FakeClip(0)) is True
+    assert svc._clip_animal_gate(image, _FakeClip(len(svc.CLIP_ANIMAL_PROMPTS))) is False
+
+
+class _ZeroClip(_FakeClip):
+    def encode_image(self, image):
+        import torch
+
+        return torch.zeros(512)
+
+
+def test_refine_species_uses_clip_labels_and_falls_back_to_yolo(monkeypatch):
+    import apps.vision.services as svc
+
+    image = Image.new("RGB", (8, 8))
+    fake = _FakeClip(svc._build_clip_prompts()[1]["fox"][0])
+    assert svc._refine_species(image, ["dog"], fake) == ["fox"]
+    assert svc._refine_species(image, ["dog"], _ZeroClip(0)) == ["dog"]
+    assert svc._refine_species(image, [], _ZeroClip(0)) == []
+
+
+def test_clip_rank_uses_cached_singleton_features(monkeypatch):
+    import apps.vision.services as svc
+
+    fake = _FakeClip(svc._build_clip_prompts()[1]["dog"][0])
+    text_feats, gate_feats, ranges = svc._prepare_clip_text_feats(fake)
+    monkeypatch.setattr(svc, "_get_clip_model", lambda: fake)
+    monkeypatch.setattr(svc, "_CLIP_TEXT_FEATS", text_feats)
+    monkeypatch.setattr(svc, "_CLIP_GATE_TEXT_FEATS", gate_feats)
+    monkeypatch.setattr(svc, "_CLIP_LABEL_RANGES", ranges)
+    ranked = svc._clip_rank(Image.new("RGB", (8, 8)))
+    assert ranked[0][0] == "dog"
+
+
+def test_refine_species_empty_rank_returns_accepted(monkeypatch):
+    import apps.vision.services as svc
+
+    monkeypatch.setattr(svc, "_clip_rank", lambda image, clip_model=None: [])
+    assert svc._refine_species(Image.new("RGB", (8, 8)), ["cat"]) == ["cat"]
+
+
+def test_get_clip_model_reuses_world_clip_and_can_build(monkeypatch):
+    import types
+
+    import apps.vision.services as svc
+
+    fake = _FakeClip(0)
+    world = types.SimpleNamespace(model=types.SimpleNamespace(clip_model=fake))
+    monkeypatch.setattr(svc, "_get_model", lambda: world)
+    monkeypatch.setattr(svc, "_CLIP_MODEL", None)
+    monkeypatch.setattr(svc, "_CLIP_TEXT_FEATS", None)
+    monkeypatch.setattr(svc, "_CLIP_GATE_TEXT_FEATS", None)
+    monkeypatch.setattr(svc, "_CLIP_LABEL_RANGES", {})
+    assert svc._get_clip_model() is fake
+    assert svc._CLIP_TEXT_FEATS is not None
+
+    import ultralytics.nn.text_model as text_model
+
+    built = _FakeClip(1)
+    monkeypatch.setattr(svc, "_get_model", lambda: types.SimpleNamespace(model=types.SimpleNamespace(clip_model=None)))
+    monkeypatch.setattr(svc, "_CLIP_MODEL", None)
+    monkeypatch.setattr(svc, "_CLIP_TEXT_FEATS", None)
+    monkeypatch.setattr(svc, "_CLIP_GATE_TEXT_FEATS", None)
+    monkeypatch.setattr(svc, "_CLIP_LABEL_RANGES", {})
+    monkeypatch.setattr(text_model, "build_text_model", lambda variant, device=None: built)
+    assert svc._get_clip_model() is built
+
+
+def test_rabbit_detected_as_cat_is_renamed_to_rabbit(monkeypatch):
+    _mock_model(
+        monkeypatch,
+        [(15, 0.85)],
+        {15: "cat"},
+        clip_rank=[("rabbit", 0.95), ("cat", 0.02)],
+    )
+    result = PetDetectionService().validate_pet_image(_img_bytes())
+    assert result.passed is True
+    assert result.pet_classes == ["rabbit"]
+    assert result.detected_classes == ["cat"]  # raw YOLO-World labels are preserved
+
+
+def test_fox_detected_as_dog_is_renamed_to_fox(monkeypatch):
+    _mock_model(
+        monkeypatch,
+        [(16, 0.63)],
+        {16: "dog"},
+        clip_rank=[("fox", 0.97), ("wolf", 0.01), ("dog", 0.005)],
+    )
+    assert PetDetectionService().validate_pet_image(_img_bytes()).pet_classes == ["fox"]
+
+
+def test_frog_detected_as_bird_is_renamed_to_frog(monkeypatch):
+    _mock_model(
+        monkeypatch,
+        [(14, 0.25)],
+        {14: "bird"},
+        clip_rank=[("frog", 0.71), ("toad", 0.25), ("lizard", 0.01)],
+    )
+    result = PetDetectionService().validate_pet_image(_img_bytes())
+    assert result.pet_classes == ["frog"]
+    assert result.detected_classes == ["bird"]
+
+
+def test_crocodile_missed_by_yolo_passes_clip_gate_as_crocodile(monkeypatch):
+    _mock_model(
+        monkeypatch,
+        [],
+        clip_rank=[("crocodile", 0.80), ("alligator", 0.10)],
+        clip_gate=True,
+    )
+    result = PetDetectionService().validate_pet_image(_img_bytes())
+    assert result.passed is True
+    assert result.pet_classes == ["crocodile"]
+    assert result.detected_classes == []
+
+
+def test_landscape_without_yolo_or_clip_animal_still_422(monkeypatch):
+    _mock_model(monkeypatch, [], clip_gate=False)
+    with pytest.raises(NoPetDetectedError) as exc_info:
+        PetDetectionService().validate_pet_image(_img_bytes())
+    assert exc_info.value.status_code == 422
+    assert exc_info.value.detected_labels == []
+
+
+def test_ambiguous_clip_top_labels_keep_multiple_species_editable(monkeypatch):
+    _mock_model(
+        monkeypatch,
+        [(15, 0.70), (16, 0.66)],
+        {15: "cat", 16: "dog"},
+        clip_rank=[("cat", 0.50), ("dog", 0.45)],
+    )
+    assert PetDetectionService().validate_pet_image(_img_bytes()).pet_classes == ["cat", "dog"]

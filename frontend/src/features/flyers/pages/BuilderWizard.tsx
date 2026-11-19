@@ -222,18 +222,21 @@ function StepPet({
   onBack: () => void;
 }) {
   const createPet = useCreatePet();
+  // Prefer the CLIP-refined species names; fall back to raw YOLO-World labels.
+  const detectedLabels = photo.pet_classes?.length ? photo.pet_classes : photo.detected_classes;
+  const detectedAnimal = detectedLabels[0];
   const form = useForm<PetValues>({
     resolver: zodResolver(petSchema),
     defaultValues: {
       name: "",
-      species: detectedSpecies(photo.detected_classes) ?? "dog",
+      species: detectedSpecies(detectedLabels) ?? "dog",
       breed: "",
       color: "",
       age: "",
       temperament_tags: "",
     },
   });
-  const autoSpecies = detectedSpecies(photo.detected_classes);
+  const autoSpecies = detectedSpecies(detectedLabels);
   const speciesDisabled = Boolean(autoSpecies);
   const [state, submit, pending] = useActionState(async (_prev: StepState, values: PetValues): Promise<StepState> => {
     try {
@@ -277,7 +280,7 @@ function StepPet({
             </select>
             {speciesDisabled && (
               <p className="t-small" style={{ color: "var(--color-muted)", marginTop: 4 }}>
-                Species auto-detected from the photo ({autoSpecies}). Change the photo to re-detect.
+                Detected animal: {detectedAnimal ? detectedAnimal.charAt(0).toUpperCase() + detectedAnimal.slice(1) : "unknown"} ({autoSpecies}). Change the photo to re-detect.
               </p>
             )}
           </FieldShell>

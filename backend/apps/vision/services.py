@@ -1,8 +1,9 @@
-"""PetDetectionService — YOLO-World animal-only gatekeeper.
+"""PetDetectionService — YOLO-World animal gate + CLIP species naming.
 
-Every uploaded pet photo is validated BEFORE any Cloudinary write. Non-animal photos are discarded
-immediately and raise NoPetDetectedError (HTTP 422). There are no strikes and no bans — the user can
-simply pick another photo.
+Every uploaded pet photo is validated BEFORE any Cloudinary write. YOLO-World proves an animal is
+present; CLIP ViT-B/32 then names the actual species for `pet_classes` while raw YOLO labels stay in
+`detected_classes`. Non-animal photos are discarded immediately and raise NoPetDetectedError
+(HTTP 422). There are no strikes and no bans — the user can simply pick another photo.
 """
 
 from __future__ import annotations
@@ -11,10 +12,10 @@ import io
 import logging
 from pathlib import Path
 from threading import Lock
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
-from PIL import Image
+from PIL import Image, ImageOps
 
 from apps.common.exceptions import NoPetDetectedError
 
@@ -55,6 +56,9 @@ ANIMAL_CATEGORY_BY_LABEL: dict[str, str] = {
     "chameleon": "Reptile",
     "turtle": "Reptile",
     "tortoise": "Reptile",
+    # Amphibians
+    "frog": "Amphibian",
+    "toad": "Amphibian",
     # Small mammals
     "hamster": "Small Mammal",
     "guinea pig": "Small Mammal",
@@ -104,8 +108,73 @@ ANIMAL_CATEGORY_BY_LABEL: dict[str, str] = {
 ANIMAL_CLASSES: tuple[str, ...] = tuple(ANIMAL_CATEGORY_BY_LABEL)
 DEFAULT_YOLO_WORLD_MODEL = "yolov8s-worldv2.pt"
 
+# CLIP ViT-B/32 is the same text encoder YOLO-World uses for prompts. We reuse it as a
+# second-stage zero-shot species classifier: YOLO-World stays the animal gate/boxer, and
+# CLIP names the actual animal (fox, crocodile, frog, rabbit, dog, …) instead of a nearby
+# COCO-ish label such as cat or bird.
+CLIP_PROMPT_TEMPLATES: tuple[str, ...] = (
+    "a photo of a {}",
+    "a close-up photo of a {}",
+    "a clear photo of a {} animal",
+    "a photo of a pet {}",
+)
+SPECIES_PROMPT_OVERRIDES: dict[str, tuple[str, ...]] = {
+    "dog": ("a domestic dog", "a pet dog looking at the camera"),
+    "cat": ("a domestic cat", "a pet cat looking at the camera"),
+    "fox": ("a red fox", "a wild fox with pointed ears and a bushy tail", "a fox in the wild"),
+    "wolf": ("a wild wolf with pointed ears",),
+    "crocodile": (
+        "a crocodile with a broad snout",
+        "a crocodile in water",
+        "a close-up of a crocodile's scaly skin",
+    ),
+    "alligator": ("an alligator with a rounded snout", "an alligator in water"),
+    "lizard": ("a lizard",),
+    "gecko": ("a gecko lizard",),
+    "iguana": ("an iguana lizard",),
+    "chameleon": ("a chameleon lizard",),
+    "frog": ("a green frog", "a frog sitting on a leaf or rock", "a frog amphibian"),
+    "toad": ("a toad with bumpy skin", "a toad amphibian"),
+    "rabbit": (
+        "a rabbit with long ears",
+        "a bunny rabbit",
+        "a cottontail rabbit",
+        "a pet rabbit with long ears and a short tail",
+    ),
+    "mouse": ("a small mouse with small rounded ears",),
+    "rat": ("a rat with a long tail",),
+    "hamster": ("a small hamster with cheek pouches",),
+    "guinea pig": ("a guinea pig with a round body",),
+    "chinchilla": ("a chinchilla with soft grey fur",),
+}
+CLIP_ANIMAL_PROMPTS: tuple[str, ...] = (
+    "a photo of an animal",
+    "a photo of a pet",
+    "a photo of wildlife",
+    "a close-up of an animal",
+    "a photo of a reptile",
+    "a photo of an amphibian",
+    "a photo of a fish",
+    "a photo of a farm animal",
+)
+CLIP_NON_ANIMAL_PROMPTS: tuple[str, ...] = (
+    "a photo of a landscape with no animal",
+    "a photo of scenery with no animal",
+    "a photo of a person with no animal",
+    "a photo of food with no animal",
+    "a photo of an object with no animal",
+    "a plain background with no animal",
+)
+CLIP_ANIMAL_GATE_MIN_PROBABILITY = 0.25
+CLIP_SPECIES_MIN_PROBABILITY = 0.15
+
 _MODEL: YOLOWorld | None = None
 _MODEL_LOCK = Lock()
+_CLIP_MODEL: Any | None = None
+_CLIP_LOCK = Lock()
+_CLIP_TEXT_FEATS: Any | None = None
+_CLIP_GATE_TEXT_FEATS: Any | None = None
+_CLIP_LABEL_RANGES: dict[str, tuple[int, int]] = {}
 
 
 def _resolve_world_model_path(path: str) -> str:
@@ -141,20 +210,131 @@ def _get_model() -> YOLOWorld:
     return _MODEL
 
 
+def _build_clip_prompts() -> tuple[list[str], dict[str, tuple[int, int]]]:
+    """Build CLIP text prompts for every supported species label."""
+    prompts: list[str] = []
+    ranges: dict[str, tuple[int, int]] = {}
+    for label in ANIMAL_CLASSES:
+        start = len(prompts)
+        prompts.extend(template.format(label) for template in CLIP_PROMPT_TEMPLATES)
+        prompts.extend(SPECIES_PROMPT_OVERRIDES.get(label, ()))
+        ranges[label] = (start, len(prompts))
+    return prompts, ranges
+
+
+def _normalize_torch(vector: Any) -> Any:
+    return vector / vector.norm(p=2, dim=-1, keepdim=True)
+
+
+def _prepare_clip_text_feats(clip_model: Any) -> tuple[Any, Any, dict[str, tuple[int, int]]]:
+    import torch
+
+    prompts, ranges = _build_clip_prompts()
+    with torch.no_grad():
+        text_feats = _normalize_torch(clip_model.encode_text(clip_model.tokenize(prompts)))
+    gate_prompts = [*CLIP_ANIMAL_PROMPTS, *CLIP_NON_ANIMAL_PROMPTS]
+    with torch.no_grad():
+        gate_feats = _normalize_torch(clip_model.encode_text(clip_model.tokenize(gate_prompts)))
+    return text_feats, gate_feats, ranges
+
+
+def _get_clip_model() -> Any:
+    """Lazily load/cache the CLIP ViT-B/32 encoder used for species naming."""
+    global _CLIP_MODEL, _CLIP_TEXT_FEATS, _CLIP_GATE_TEXT_FEATS, _CLIP_LABEL_RANGES
+    if _CLIP_MODEL is None:
+        with _CLIP_LOCK:
+            if _CLIP_MODEL is None:
+                world_model = getattr(_get_model(), "model", None)
+                clip_model = getattr(world_model, "clip_model", None)
+                if clip_model is None:
+                    import torch
+                    from ultralytics.nn.text_model import build_text_model
+
+                    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    clip_model = build_text_model("clip:ViT-B/32", device=device)
+                _CLIP_TEXT_FEATS, _CLIP_GATE_TEXT_FEATS, _CLIP_LABEL_RANGES = _prepare_clip_text_feats(clip_model)
+                _CLIP_MODEL = clip_model
+    return _CLIP_MODEL
+
+
+def _clip_rank(image: Any, clip_model: Any | None = None) -> list[tuple[str, float]]:
+    """Rank all supported species labels for an image with CLIP (probabilities)."""
+    import torch
+
+    model = clip_model or _get_clip_model()
+    if clip_model is None:
+        text_feats = _CLIP_TEXT_FEATS
+        ranges = _CLIP_LABEL_RANGES
+    else:
+        text_feats, _, ranges = _prepare_clip_text_feats(model)
+    assert text_feats is not None
+    with torch.no_grad():
+        image_feat = model.encode_image(image)
+        logits = (100.0 * image_feat @ text_feats.T).squeeze(0)
+    scores: list[tuple[str, float]] = []
+    for label, (start, end) in ranges.items():
+        scores.append((label, float(logits[start:end].mean().item())))
+    probs = torch.softmax(torch.tensor([score for _, score in scores]), dim=0)
+    ranked = sorted(zip([label for label, _ in scores], probs.tolist(), strict=True), key=lambda item: -item[1])
+    return [(label, float(prob)) for label, prob in ranked]
+
+
+def _clip_animal_gate(image: Any, clip_model: Any | None = None) -> bool:
+    """CLIP fallback gate for clear animal photos that YOLO-World misses at 0.20."""
+    import torch
+
+    model = clip_model or _get_clip_model()
+    if clip_model is None:
+        gate_feats = _CLIP_GATE_TEXT_FEATS
+    else:
+        _, gate_feats, _ = _prepare_clip_text_feats(model)
+    assert gate_feats is not None
+    with torch.no_grad():
+        image_feat = model.encode_image(image)
+        logits = (100.0 * image_feat @ gate_feats.T).squeeze(0)
+    probs = torch.softmax(logits, dim=0)
+    animal_count = len(CLIP_ANIMAL_PROMPTS)
+    animal_prob = float(probs[:animal_count].max().item())
+    non_animal_prob = float(probs[animal_count:].max().item())
+    return animal_prob >= CLIP_ANIMAL_GATE_MIN_PROBABILITY and animal_prob > non_animal_prob
+
+
+def _refine_species(image: Any, accepted_raw: list[str], clip_model: Any | None = None) -> list[str]:
+    """Name the actual animal with CLIP; fall back to YOLO-World labels when unsure."""
+    rank = _clip_rank(image, clip_model)
+    if not rank:
+        return list(accepted_raw)
+    top_prob = rank[0][1]
+    min_prob = max(CLIP_SPECIES_MIN_PROBABILITY, top_prob * 0.5)
+    selected = [label for label, prob in rank if prob >= min_prob and label in ANIMAL_CATEGORY_BY_LABEL]
+    if selected:
+        return selected
+    if accepted_raw:
+        return list(accepted_raw)
+    return [rank[0][0]] if top_prob >= settings.YOLO_CONFIDENCE_THRESHOLD else []
+
+
 class PetDetectionService:
     """Validates that an image contains an animal from the configured categories."""
 
     def validate_pet_image(self, image_bytes: bytes) -> DetectionResult:
-        """Run YOLO-World over the image; return pass/fail plus detected labels.
+        """Gate with YOLO-World and name the species with CLIP.
 
-        Raises NoPetDetectedError when no configured animal clears the confidence threshold.
+        Returns pass/fail, refined `pet_classes`, and raw `detected_classes`. Raises
+        NoPetDetectedError when neither YOLO-World nor the CLIP animal gate finds an animal.
         """
         model = _get_model()
-        image = Image.open(io.BytesIO(image_bytes))
+        image = ImageOps.exif_transpose(Image.open(io.BytesIO(image_bytes)))
         image.load()
-        results = model.predict(image, verbose=False)
-        pet_classes: list[str] = []
+        if image.mode != "RGB":
+            image = image.convert("RGB")
+        results = model.predict(
+            image,
+            conf=settings.YOLO_CONFIDENCE_THRESHOLD,
+            verbose=False,
+        )
         detected_classes: list[str] = []
+        accepted_raw: list[str] = []
         max_confidence = 0.0
         for result in results:
             if not hasattr(result, "names") or not hasattr(result, "boxes"):
@@ -165,15 +345,25 @@ class PetDetectionService:
                 continue
             for cls_id, conf in zip(boxes.cls.tolist(), boxes.conf.tolist(), strict=True):
                 label = str(names[int(cls_id)]).strip().lower()
-                max_confidence = max(max_confidence, float(conf))
+                confidence = float(conf)
+                max_confidence = max(max_confidence, confidence)
                 if label not in detected_classes:
                     detected_classes.append(label)
                 if (
                     label in ANIMAL_CATEGORY_BY_LABEL
-                    and float(conf) >= settings.YOLO_CONFIDENCE_THRESHOLD
-                    and label not in pet_classes
+                    and confidence >= settings.YOLO_CONFIDENCE_THRESHOLD
+                    and label not in accepted_raw
                 ):
-                    pet_classes.append(label)
+                    accepted_raw.append(label)
+        if accepted_raw:
+            # YOLO-World proved an animal is present; CLIP names the actual species.
+            pet_classes = _refine_species(image, accepted_raw)
+        elif _clip_animal_gate(image):
+            # Clear animal photo that YOLO-World missed at the configured threshold
+            # (e.g. a crocodile close-up): CLIP gate + CLIP species naming.
+            pet_classes = _refine_species(image, [])
+        else:
+            pet_classes = []
         passed = bool(pet_classes)
         detection = DetectionResult(
             passed=passed,

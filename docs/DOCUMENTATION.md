@@ -18,7 +18,8 @@ product:
   shelter/foster framing.
 
 Every uploaded pet photo passes a YOLO-World open-vocabulary animal-detection gatekeeper before
-it ever reaches storage. Non-animal photos are rejected with a friendly 422 — no strikes, no bans.
+it ever reaches storage, and a CLIP second stage names the actual species. Non-animal photos are
+rejected with a friendly 422 — no strikes, no bans.
 The web app (`frontend/`, React 19 + TS + Vite) implements the full product in the browser, and
 Playwright E2E covers the 6 critical journeys end-to-end.
 
@@ -32,8 +33,9 @@ Playwright E2E covers the 6 critical journeys end-to-end.
 - **Storage**: Cloudinary (private delivery type, HMAC-signed URLs only) via the `cloudinary`
   SDK, wrapped in a Django `Storage` backend (`apps/common/cloudinary_storage.py`).
 - **Payments**: Stripe Python SDK (test mode) + PayMongo REST via httpx (GCash Checkout, QR Ph).
-- **AI Vision**: Ultralytics YOLO-World (`yolov8s-worldv2.pt`) with 64 configured animal labels,
-  grouped into domestic, zoo/exotic, reptile, small-mammal, farm, bird, and fish categories.
+- **AI Vision**: Ultralytics YOLO-World (`yolov8s-worldv2.pt`) with 66 configured animal labels as
+  the gate/boxer, plus CLIP ViT-B/32 zero-shot species naming; labels are grouped into domestic,
+  zoo/exotic, reptile, amphibian, small-mammal, farm, bird, and fish categories.
 - **Exports**: WeasyPrint A4@300dpi PNG/PDF flyers + Pillow thumbnails; Playwright for
   browser-side exports.
 - **Infra**: `docker-compose.yml` provides `postgres:16`, `redis:7`, `mailpit` (storage is
@@ -138,22 +140,35 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   outreach mode uses sage/teal/terracotta warmth. The detail page's Print button uses the
   same sheet.
 
-## 8. AI Pet Detection (YOLO-World Gatekeeper)
+## 8. AI Pet Detection (YOLO-World gate + CLIP species naming)
 
 - `PetDetectionService.validate_pet_image(image_bytes)` lazily loads one process-local,
   lock-protected `ultralytics.YOLOWorld(settings.YOLO_MODEL_PATH)` singleton
   (default `yolov8s-worldv2.pt`, cached after the first upload) and calls
-  `model.set_classes(list(ANIMAL_CLASSES))` with 64 open-vocabulary animal labels.
+  `model.set_classes(list(ANIMAL_CLASSES))` with 66 open-vocabulary animal labels.
 - `ANIMAL_CATEGORY_BY_LABEL` groups the raw model labels into **Domestic Pet**
   (`dog`, `cat`), **Zoo / Exotic** (`lion`, `tiger`, `wolf`, `fox`, `bear`, `elephant`,
   `giraffe`, `zebra`, `kangaroo`, `koala`, `panda`, `monkey`, `deer`), **Reptile**
   (`crocodile`, `alligator`, `snake`, `lizard`, `gecko`, `iguana`, `chameleon`, `turtle`,
-  `tortoise`), **Small Mammal** (`hamster`, `guinea pig`, `ferret`, `chinchilla`, `mouse`,
-  `rat`, `hedgehog`, `sugar glider`, `rabbit`), **Farm Animal**, **Bird**, and **Fish**.
-  Acceptance is label-based (not COCO class IDs), raw labels such as `dog` and `lion` stay in
-  `pet_classes` / `detected_classes`, and the confidence threshold defaults to `0.20`
-  (`YOLO_CONFIDENCE_THRESHOLD`) so non-COCO species are reliably accepted.
-- The loader falls back to `yolov8s-worldv2.pt` if a stale non-World `YOLO_MODEL_PATH` is
+  `tortoise`), **Amphibian** (`frog`, `toad`), **Small Mammal** (`hamster`, `guinea pig`,
+  `ferret`, `chinchilla`, `mouse`, `rat`, `hedgehog`, `sugar glider`, `rabbit`),
+  **Farm Animal**, **Bird**, and **Fish**. Acceptance is label-based (not COCO class IDs),
+  the confidence threshold defaults to `0.20` (`YOLO_CONFIDENCE_THRESHOLD`), and the threshold is
+  passed into `model.predict(..., conf=settings.YOLO_CONFIDENCE_THRESHOLD)` — Ultralytics'
+  own predictor default is `0.25`, which would otherwise discard `0.20–0.25` detections such
+  as small pets before PawPrint sees them. Uploaded images are EXIF-orientation-normalized and
+  converted to RGB before inference so rotated phone photos are detected as displayed.
+- **Species naming**: YOLO-World alone can pass a clear animal under a nearby label (rabbit →
+  `cat`, crocodile → `bird`, fox → `dog`). After the YOLO-World gate proves an animal is present,
+  a second lazily loaded, lock-protected **CLIP ViT-B/32** zero-shot classifier (the same
+  `/weights/clip/ViT-B-32.pt` encoder YOLO-World uses for prompts) ranks fine-grained species
+  prompts over the whole photo. The refined animal names go into `pet_classes`
+  (`fox`, `crocodile`, `frog`, `rabbit`, `dog`, …), while the raw YOLO-World labels stay in
+  `detected_classes` for the API/audit trail. If YOLO-World finds nothing at `0.20` but CLIP's
+  animal-vs-non-animal gate is confident (e.g. a crocodile close-up), the photo still passes and
+  is named by CLIP; plain landscapes still 422. When CLIP is unsure it falls back to the raw
+  accepted YOLO labels.
+- The YOLO loader falls back to `yolov8s-worldv2.pt` if a stale non-World `YOLO_MODEL_PATH` is
   configured, and raises a clear `RuntimeError` if the checkpoint does not contain a World head.
   Generated weights (`backend/yolov8s-worldv2.pt`, `/weights/`) are git-ignored; Ultralytics
   downloads them on first lazy load.
@@ -171,12 +186,14 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   server telemetry. Backend processing switches the bar to an indeterminate animated state. Reduced
   motion disables the scan/spinner/progress animations without hiding status information.
 - The 422 renders a friendly `no-pet-error` box ("No strikes, no bans — just pick another photo")
-  and the picker stays open for an immediate retry; a passing photo shows a "Pet detected ✓" badge.
-  In the builder, one recognized standard species auto-selects and disables the species field;
-  ambiguous multi-species results (e.g. `cat` + `dog`) stay editable, and expanded animals map to
-  `other`.
-- E2E journey ④ drives both photos through the real YOLO-World model: `e2e/fixtures/dog.jpg`
-  passes as `cat` @ 0.717 + `dog` @ 0.655 (ambiguous species stays editable, defaulting to dog),
+  and the picker stays open for an immediate retry; a passing photo shows a
+  "Detected: `<animal>` ✓" badge using the refined `pet_classes`. In the builder the refined
+  `pet_classes` drive species selection (falling back to raw `detected_classes`); one recognized
+  standard species auto-selects and disables the species field, ambiguous multi-species results
+  (e.g. `cat` + `dog`) stay editable, non-standard animals map to `other`, and the UI states the
+  exact detected animal name (e.g. "Detected animal: Rabbit") instead of only "other".
+- E2E journey ④ drives both photos through the real models: `e2e/fixtures/dog.jpg`
+  passes as refined `dog` (raw `cat` @ 0.717 + `dog` @ 0.655 stay in `detected_classes`),
   while `landscape.jpg` → 422.
 
 ## 9. Payments — Rewards (Stripe Test + GCash / QR Ph)
@@ -226,19 +243,22 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
 ## 11. Testing & Coverage
 
 - Backend: `cd backend && .venv/bin/python -m pytest tests/ -q --cov=apps --cov-fail-under=80`
-  → **107 passed, 94.42% total** (100% on all `services.py`, `drivers.py`,
+  → **121 passed, 94.77% total** (100% on all `services.py`, `drivers.py`,
   `apps/vision/services.py`, and the Cloudinary storage driver);
   `django_assert_max_num_queries` ceilings on list/detail endpoints; 429 tests for the
   `auth_write` (20/min) and `upload` (10/min) throttles; webhook idempotency tests (duplicate
   `(provider, event_id)` → single processing); 422-before-storage tests (non-animal bytes never
-  reach Cloudinary); expanded YOLO-World category/threshold/loader tests (64 labels,
-  confidence `0.20`, stale-path fallback, non-World checkpoint rejection); Cloudinary driver
-  unit tests (SDK mocked, 100% on the driver);
+  reach Cloudinary); expanded YOLO-World + CLIP species tests (66 labels,
+  `conf=0.20` asserted on the predictor call, EXIF-orientation/RGB normalization, stale-path
+  fallback, non-World checkpoint rejection, rabbit/fox/frog/crocodile renaming from wrong raw
+  labels, CLIP animal-gate fallback for YOLO misses, CLIP singleton/loader paths, ambiguous
+  multi-species editability); Cloudinary driver unit tests (SDK mocked, 100% on the driver);
   `responses`/MockTransport for Stripe/PayMongo HTTP; `factory-boy` factories.
-- Frontend: `npm run test:run` → **69 Vitest tests, 6 files** (RTL + MSW, jsdom), including
+- Frontend: `npm run test:run` → **70 Vitest tests, 6 files** (RTL + MSW, jsdom), including
   drag-and-drop, real Axios upload-progress callbacks, all four live processing labels, the animated
-  indeterminate bar, ambiguous-species editability, and successful completion;
-  `npm run test:coverage` → **87.91% stmts / 81.29% branches / 84.21% funcs / 88.95% lines**
+  indeterminate bar, refined-`pet_classes` species selection (rabbit over raw `cat`), ambiguous-species
+  editability, and successful completion;
+  `npm run test:coverage` → **88.12% stmts / 81.31% branches / 84.21% funcs / 89.18% lines**
   (thresholds 70/60/70/70) with **`src/features/rewards/**` at 100%** (per-glob threshold).
   `npx tsc -b --noEmit` clean; `npm run build` green.
 - E2E: `npm run test:e2e` (Playwright, `frontend/playwright.config.ts`) → **6 journeys /
@@ -433,7 +453,30 @@ consumed by the frontend via `openapi-typescript` → `frontend/src/lib/api/sche
   Real inference: `dog.jpg` → `cat` @ 0.717 + `dog` @ 0.655; `landscape.jpg` → 422. Verified:
   **107 pytest passed @ 94.42%** (`apps/vision/services.py` 100%), **69 Vitest** @
   87.91/81.29/84.21/88.95, **7/7 Playwright**, ruff + mypy + `tsc -b` + `vite build` clean.
+- **Phase 15** — Rabbit / low-confidence hardening: the configured `0.20` threshold is now passed
+  straight into `YOLO-World.predict(conf=...)` instead of being applied only after inference
+  (Ultralytics defaults the predictor to `conf=0.25`, silently dropping `0.20–0.25` detections).
+  Uploads are also EXIF-orientation-normalized and converted to RGB before prediction, so rotated
+  phone photos are analyzed as displayed. Added regression tests asserting the predictor receives
+  `conf=0.20` and that an orientation-6 RGBA upload is transposed to RGB. E2E guest/reward specs
+  now locate the seeded Bruno flyer via `q=Bruno` so accumulated local flyers cannot reorder the
+  home rail/pagination. Verified: **109 pytest passed @ 94.43%** (`apps/vision/services.py`
+  100%), **69 Vitest** @ 87.91/81.29/84.21/88.95, **7/7 Playwright**, ruff + mypy + `tsc -b` +
+  `vite build` clean.
+- **Phase 16** — Species identity fix: YOLO-World still gates at `conf=0.20`, but a lazily
+  loaded lock-protected **CLIP ViT-B/32** second stage now names the actual animal from
+  fine-grained prompts (`frog`/`toad` added as **Amphibian**; rabbit/fox/crocodile/dog prompts
+  disambiguated). Refined names land in `pet_classes`; raw YOLO labels stay in
+  `detected_classes`. If YOLO-World misses at 0.20, a CLIP animal-vs-non-animal gate can still
+  pass clear animal photos (crocodile close-up) while landscapes remain 422. Frontend prefers
+  refined `pet_classes`, shows `Detected: <animal> ✓`, and the builder states the exact detected
+  animal (e.g. Rabbit) even when the standard species enum is `other`. Real-image checks:
+  fox → `fox` (raw `dog`), frog → `frog` (raw `bird`), cottontail rabbits → `rabbit` (raw
+  `cat`), dog fixture → `dog` (raw `cat`+`dog`), crocodile → `crocodile`/alligator close pair
+  (raw often `bird`), landscape → 422. Verified: **121 pytest passed @ 94.77%**
+  (`apps/vision/services.py` 100%), **70 Vitest** @ 88.12/81.31/84.21/89.18, **7/7 Playwright**,
+  ruff + mypy + `tsc -b` + `vite build` clean.
 
-**Final status:** backend **107 passed @ 94.42%** (100% services/drivers/vision/storage);
-frontend **69 vitest tests** @ 87.91/81.29/84.21/88.95 (rewards 100%) + **7 Playwright tests
+**Final status:** backend **121 passed @ 94.77%** (100% services/drivers/vision/storage);
+frontend **70 vitest tests** @ 88.12/81.31/84.21/89.18 (rewards 100%) + **7 Playwright tests
 green**; `ruff` + `mypy` clean; `tsc -b` + `vite build` green; `npm run docs:pdf` regenerated.
